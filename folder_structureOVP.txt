@@ -1,0 +1,381 @@
+.
+├── CHANGELOG.md
+├── CONTRIBUTING.md
+├── Cargo.toml
+├── LICENSE
+├── README.md
+├── benchmark
+│   ├── mod.rs
+│   ├── reporting
+│   │   └── mod.rs
+│   └── scenarios
+│       ├── latency.rs
+│       ├── mod.rs
+│       └── throughput.rs
+├── blueprint.md
+├── blueprint.tex
+├── build.rs
+├── config.toml
+├── docs
+│   ├── API.md
+│   ├── ARCHITECTURE.md
+│   ├── BLUEPRINT.md
+│   ├── DEPLOYMENT.md
+│   ├── DEV.md
+│   └── README.md
+├── folder_structureOVP.txt
+├── rust-toolchain.toml
+├── sdk
+│   ├── python
+│   │   ├── __init__.py
+│   │   ├── client.py
+│   │   └── types.py
+│   ├── rust
+│   │   ├── client.rs
+│   │   ├── lib.rs
+│   │   └── types.rs
+│   └── typescript
+│       ├── client.ts
+│       ├── index.ts
+│       └── types.ts
+├── src
+│   ├── api
+│   │   ├── api_epoch.rs
+│   │   ├── errors.rs
+│   │   ├── handlers.rs
+│   │   ├── middleware.rs
+│   │   ├── routes.rs
+│   │   ├── stats.rs
+│   │   └── validation.rs
+│   ├── bridge
+│   │   ├── btc
+│   │   │   ├── bridge_btc.rs
+│   │   │   ├── client_btc.rs
+│   │   │   ├── types_btc.rs
+│   │   │   └── verification_btc.rs
+│   │   ├── eth
+│   │   │   ├── bridge_eth.rs
+│   │   │   ├── client_eth.rs
+│   │   │   ├── types_eth.rs
+│   │   │   └── verification_eth.rs
+│   │   └── ton
+│   │       ├── bridge_ton.rs
+│   │       ├── client_ton.rs
+│   │       ├── types_ton.rs
+│   │       └── verification_ton.rs
+│   ├── config
+│   │   ├── client
+│   │   │   ├── config_cs.rs
+│   │   │   ├── defaults_cs.rs
+│   │   │   ├── loader.rs
+│   │   │   └── validation_cs.rs
+│   │   └── validation.rs
+│   ├── config.rs
+│   ├── core
+│   │   ├── circuit
+│   │   │   ├── client
+│   │   │   │   ├── proof_circuit_cs.rs
+│   │   │   │   ├── state_circuit_cs.rs
+│   │   │   │   ├── transaction_circuit_cs.rs
+│   │   │   │   └── verification_circuit_cs.rs
+│   │   │   ├── intermediate
+│   │   │   │   ├── proof_circuit_i.rs
+│   │   │   │   ├── rebalance_circuit_i.rs
+│   │   │   │   ├── state_circuit_i.rs
+│   │   │   │   └── verification_circuit_i.rs
+│   │   │   ├── node
+│   │   │   │   └── storage_node_circuits.rs
+│   │   │   └── root
+│   │   │       ├── epoch_circuit.rs
+│   │   │       ├── proof_circuit_r.rs
+│   │   │       ├── state_circuit_r.rs
+│   │   │       └── verification_circuit_r.rs
+│   │   ├── crypto
+│   │   │   ├── encryption.rs
+│   │   │   ├── hash.rs
+│   │   │   ├── signature.rs
+│   │   │   └── zkp.rs
+│   │   ├── economical
+│   │   │   ├── batteries
+│   │   │   │   ├── charging.rs
+│   │   │   │   ├── discharge.rs
+│   │   │   │   └── monitoring.rs
+│   │   │   ├── fees
+│   │   │   │   ├── distribution_fee.rs
+│   │   │   │   ├── storage_fee.rs
+│   │   │   │   └── transaction_fee.rs
+│   │   │   └── staking
+│   │   │       ├── rewards.rs
+│   │   │       ├── slashing.rs
+│   │   │       └── stake.rs
+│   │   ├── hash
+│   │   │   ├── hash_utils.rs
+│   │   │   └── merkle.rs
+│   │   ├── message
+│   │   │   ├── client
+│   │   │   │   ├── message_types_c.rs
+│   │   │   │   ├── serialization.rs
+│   │   │   │   └── validation.rs
+│   │   │   ├── intermediate
+│   │   │   │   ├── epidemic_protocol_i.rs
+│   │   │   │   ├── serialization.rs
+│   │   │   │   ├── types.rs
+│   │   │   │   └── validation.rs
+│   │   │   ├── node
+│   │   │   │   ├── epidemic_system.rs
+│   │   │   │   ├── serialization.rs
+│   │   │   │   ├── types.rs
+│   │   │   │   └── validation.rs
+│   │   │   ├── root
+│   │   │   │   ├── serialization.rs
+│   │   │   │   ├── types.rs
+│   │   │   │   └── validation.rs
+│   │   │   └── server
+│   │   │       ├── serialization.rs
+│   │   │       ├── types.rs
+│   │   │       └── validation.rs
+│   │   ├── op_codes
+│   │   │   ├── op_code_definitions.rs
+│   │   │   ├── op_code_definitions_wasm.rs
+│   │   │   ├── op_code_utils.rs
+│   │   │   └── op_code_verify.rs
+│   │   ├── operation
+│   │   │   ├── client
+│   │   │   │   ├── client_state_ops.rs
+│   │   │   │   ├── client_transaction_ops.rs
+│   │   │   │   └── client_verification_ops.rs
+│   │   │   ├── intermediate
+│   │   │   │   ├── inter_state_ops.rs
+│   │   │   │   ├── inter_transaction_ops.rs
+│   │   │   │   └── inter_verification_ops.rs
+│   │   │   ├── node
+│   │   │   │   ├── node_state_ops.rs
+│   │   │   │   ├── node_transaction_ops.rs
+│   │   │   │   └── node_verification_ops.rs
+│   │   │   └── root
+│   │   │       ├── root_epoch_ops.rs
+│   │   │       ├── root_state_ops.rs
+│   │   │       └── root_verification_ops.rs
+│   │   ├── privacy
+│   │   │   ├── client
+│   │   │   │   ├── anonymity_client_side.rs
+│   │   │   │   ├── encryption_client_side.rs
+│   │   │   │   └── verification_client_side.rs
+│   │   │   ├── intermediate
+│   │   │   │   ├── anonymity_intermediate_contract.rs
+│   │   │   │   ├── encryption_intermediate_contract.rs
+│   │   │   │   └── verification_intermediate_contract.rs
+│   │   │   ├── node
+│   │   │   │   └── anonymity_node_side.rs
+│   │   │   └── root
+│   │   │       ├── anonymity_root_contract.rs
+│   │   │       ├── encryption_root_contract.rs
+│   │   │       └── verification_root_contract.rs
+│   │   ├── security
+│   │   │   ├── client
+│   │   │   │   ├── authentication.rs
+│   │   │   │   ├── authorization.rs
+│   │   │   │   └── validation.rs
+│   │   │   ├── intermediate
+│   │   │   │   ├── authentication.rs
+│   │   │   │   ├── authorization.rs
+│   │   │   │   ├── lifecycle.rs
+│   │   │   │   └── validation.rs
+│   │   │   ├── node
+│   │   │   │   ├── authentication.rs
+│   │   │   │   ├── authorization.rs
+│   │   │   │   └── validation.rs
+│   │   │   └── root
+│   │   │       ├── authentication.rs
+│   │   │       ├── authorization.rs
+│   │   │       └── validation.rs
+│   │   ├── state
+│   │   │   ├── boc
+│   │   │   │   ├── cell.rs
+│   │   │   │   ├── serialization.rs
+│   │   │   │   └── validation.rs
+│   │   │   ├── smt
+│   │   │   │   ├── sparse_merkle_tree.rs
+│   │   │   │   └── sparse_merkle_tree_wasm.rs
+│   │   │   └── zkp
+│   │   │       ├── circuit.rs
+│   │   │       ├── plonky2.rs
+│   │   │       ├── proof.rs
+│   │   │       └── zkp.rs
+│   │   ├── storage_node
+│   │   │   ├── client
+│   │   │   │   ├── cleanup_client.rs
+│   │   │   │   ├── retrieval_client.rs
+│   │   │   │   └── store_client.rs
+│   │   │   ├── intermediate
+│   │   │   │   ├── cleanup_intermediate.rs
+│   │   │   │   ├── retrieval_intermediate.rs
+│   │   │   │   └── store_intermediate.rs
+│   │   │   ├── node.rs
+│   │   │   ├── root
+│   │   │   │   ├── cleanup_root.rs
+│   │   │   │   ├── retrieval_root.rs
+│   │   │   │   └── store_root.rs
+│   │   │   └── storage_node_utils
+│   │   │       ├── battery_handler.rs
+│   │   │       ├── replication.rs
+│   │   │       └── verify_storage.rs
+│   │   ├── structure
+│   │   │   ├── boc
+│   │   │   │   ├── structure.rs
+│   │   │   │   └── validation.rs
+│   │   │   └── hierarchical
+│   │   │       ├── client
+│   │   │       │   ├── channel_system.rs
+│   │   │       │   ├── contract.rs
+│   │   │       │   ├── helper_client.rs
+│   │   │       │   ├── state.rs
+│   │   │       │   ├── transaction_validation.rs
+│   │   │       │   ├── verification.rs
+│   │   │       │   └── wallet_extension_contract.rs
+│   │   │       ├── hierarchical.rs
+│   │   │       ├── intermediate
+│   │   │       │   ├── contract.rs
+│   │   │       │   ├── intermediate.rs
+│   │   │       │   ├── state.rs
+│   │   │       │   └── verification.rs
+│   │   │       └── root
+│   │   │           ├── contract.rs
+│   │   │           ├── root.rs
+│   │   │           ├── state.rs
+│   │   │           └── verification.rs
+│   │   ├── types
+│   │   │   ├── boc
+│   │   │   │   ├── conversion_boc.rs
+│   │   │   │   ├── types_boc.rs
+│   │   │   │   └── validation_boc.rs
+│   │   │   ├── cell
+│   │   │   │   ├── conversion_cell.rs
+│   │   │   │   ├── types_cell.rs
+│   │   │   │   └── validation_cell.rs
+│   │   │   ├── client
+│   │   │   │   ├── conversion_client.rs
+│   │   │   │   ├── types_channel.rs
+│   │   │   │   ├── types_wallet.rs
+│   │   │   │   └── validation_client.rs
+│   │   │   ├── common
+│   │   │   │   ├── conversion_common.rs
+│   │   │   │   ├── types_common.rs
+│   │   │   │   └── validation_common.rs
+│   │   │   ├── error
+│   │   │   │   ├── conversion_error.rs
+│   │   │   │   ├── handling_error.rs
+│   │   │   │   └── types_error.rs
+│   │   │   ├── intermediate
+│   │   │   │   ├── conversion_inter.rs
+│   │   │   │   ├── types_inter.rs
+│   │   │   │   └── validation_inter.rs
+│   │   │   ├── manager
+│   │   │   │   └── manager_types.rs
+│   │   │   ├── node
+│   │   │   │   ├── conversion_node.rs
+│   │   │   │   ├── types_node.rs
+│   │   │   │   └── validation_node.rs
+│   │   │   ├── root
+│   │   │   │   ├── conversion_root.rs
+│   │   │   │   ├── types_root.rs
+│   │   │   │   └── validation_root.rs
+│   │   │   ├── transaction_types.rs
+│   │   │   ├── tree
+│   │   │   │   ├── conversion_tree.rs
+│   │   │   │   ├── types_tree.rs
+│   │   │   │   └── validation_tree.rs
+│   │   │   └── zkp
+│   │   │       ├── conversion_zkp.rs
+│   │   │       ├── types_zkp.rs
+│   │   │       └── validation_zkp.rs
+│   │   └── utils
+│   │       ├── conversion.rs
+│   │       ├── serialization.rs
+│   │       └── validation.rs
+│   ├── db
+│   │   ├── db.rs
+│   │   ├── migrations
+│   │   │   └── mod.rs
+│   │   ├── models.rs
+│   │   └── schema.rs
+│   ├── dex
+│   │   ├── dex.rs
+│   │   ├── liquidity.rs
+│   │   ├── matching.rs
+│   │   ├── orderbook.rs
+│   │   ├── settlement.rs
+│   │   └── trading.rs
+│   ├── func
+│   │   ├── dex.func
+│   │   ├── ovp_bridge.func
+│   │   ├── ovp_connect.func
+│   │   └── private_trading.func
+│   ├── helper
+│   │   ├── conversion.rs
+│   │   ├── serialization.rs
+│   │   └── validation.rs
+│   ├── lib.rs
+│   ├── logging
+│   │   ├── configuration.rs
+│   │   └── formatters.rs
+│   ├── main.rs
+│   ├── manager
+│   │   ├── client
+│   │   │   ├── manager_channels.rs
+│   │   │   ├── manager_smt_c.rs
+│   │   │   └── manager_wallet.rs
+│   │   ├── intermediate
+│   │   │   ├── manager_rebalance.rs
+│   │   │   └── manager_smt_i.rs
+│   │   ├── manager_state.rs
+│   │   ├── node
+│   │   │   └── manager_storage.rs
+│   │   └── root
+│   │       ├── manager_epoch.rs
+│   │       └── manager_smt_r.rs
+│   ├── metrics
+│   │   ├── collection.rs
+│   │   ├── reporting.rs
+│   │   └── storage.rs
+│   ├── network
+│   │   ├── discovery.rs
+│   │   ├── peer.rs
+│   │   ├── protocol.rs
+│   │   ├── sync.rs
+│   │   └── transport.rs
+│   ├── nft
+│   │   ├── metadata.rs
+│   │   ├── token.rs
+│   │   └── transfer.rs
+│   ├── proto
+│   │   ├── messages.proto
+│   │   └── services.proto
+│   └── wasm
+│       ├── bindings_wasm.rs
+│       ├── conversion_wasm.rs
+│       ├── runtime_wasm.rs
+│       └── types_wasm.rs
+└── tests
+    ├── common.rs
+    ├── helpers.rs
+    ├── integration
+    │   ├── hierarchy_tests.rs
+    │   ├── mod.rs
+    │   ├── network_tests.rs
+    │   └── storage_tests.rs
+    ├── network
+    │   ├── chaos.rs
+    │   ├── mod.rs
+    │   ├── performance.rs
+    │   └── simulation.rs
+    ├── performance
+    │   ├── benchmarks.rs
+    │   ├── metrics.rs
+    │   ├── mod.rs
+    │   └── scaling.rs
+    └── unit
+        ├── channel_tests.rs
+        ├── mod.rs
+        ├── state_tests.rs
+        └── transaction_tests.rs

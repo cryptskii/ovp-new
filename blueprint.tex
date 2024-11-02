@@ -1,0 +1,951 @@
+\documentclass[14pt]{extreport}  % Use extsizes package for 14pt support
+\usepackage{geometry}
+\usepackage{amsmath, amsthm, amssymb, amsfonts}
+\usepackage{algpseudocode}  % Only use algpseudocode if pseudocode is needed
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{url}
+\usepackage{imakeidx}
+\usepackage[english]{babel}
+\usepackage{enumitem}
+\usepackage{hyperref}
+\usepackage{booktabs} 
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{algorithm}
+
+% Automatically add \index entries for each section and subsection
+% Redefine \section and \subsection to automatically add index entries
+% Customize the index to add a line between entries
+\lstset{
+    breaklines=true,    % Enable line breaking
+    breakatwhitespace=true,   % Only break at whitespace
+    postbreak=\mbox{\textcolor{red}{$\hookrightarrow$}\space}, % Add an arrow at the line break
+    basicstyle=\ttfamily\footnotesize % Adjust font size if necessary
+}
+\newcommand{\idxsepline}{\rule[0.5ex]{\linewidth}{0.5pt}}  % Define separator line
+
+\let\oldsection\section
+\renewcommand{\section}[1]{\oldsection{#1}\index{#1}}
+
+\let\oldsubsection\subsection
+\renewcommand{\subsection}[1]{\oldsubsection{#1}\index{#1}}
+\makeindex
+
+\lstdefinelanguage{JavaScript}{
+  keywords={break, case, catch, continue, debugger, default, delete, do, else, finally, for, function, if, in, instanceof, new, return, switch, this, throw, try, typeof, var, void, while, with},
+  morecomment=[l]{//},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]',
+  morestring=[b]",
+  ndkeywords={class, export, boolean, throw, implements, import, this},
+  keywordstyle=\color{blue}\bfseries,
+  ndkeywordstyle=\color{darkgray}\bfseries,
+  identifierstyle=\color{black},
+  commentstyle=\color{purple}\ttfamily,
+  stringstyle=\color{red}\ttfamily,
+  sensitive=true
+}
+
+\newtheorem{example}{Example}
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{corollary}{Corollary}[theorem]
+\newtheorem{assumption}{Assumption}
+\newtheorem{definition}{Definition}
+\renewcommand\thesection{\arabic{section}}  % This removes the chapter number from sections
+\renewcommand\thesubsection{\thesection.\arabic{subsection}}  % Subsections will still be numbered as 1.1, 1.2, etc.
+
+\renewcommand{\qedsymbol}{$\blacksquare$}
+
+
+
+\title{Overpass}
+\date{October 2024}
+
+\begin{document}
+
+\maketitle
+
+I'll create a condensed LaTeX document with all the mathematical foundations, proofs, and key technical specifications from the paper, excluding the DEX sections. I'll maintain all mathematical rigor while providing minimal but essential comments.
+
+
+
+
+\section{Core System Definitions}
+
+\begin{definition}[Unilateral Payment Channel]
+A unilateral payment channel is a cryptographic construct enabling off-chain transactions between two parties with only opening/closing requiring on-chain operations.
+\end{definition}
+
+\begin{theorem}[Horizontal Scalability]
+The transaction throughput $T$ of the Overpass Channels network scales linearly with the number of active channels $n$:
+\[ T = n \times t \]
+where $t$ is the average transactions per second per channel.
+\end{theorem}
+
+\begin{definition}[Channel Liquidity]
+The liquidity $L$ of a channel is defined as the maximum amount transferable through the channel in a single direction without requiring an on-chain transaction.
+\end{definition}
+
+\section{Dynamic Rebalancing}
+
+\subsection{System Components}
+Let:
+\begin{itemize}
+\item $C_W = \{C_1, C_2, ..., C_n\}$ be the set of Channel Contracts managed by wallet W
+\item $B_{C_i}$ be the balance of Channel Contract $C_i$
+\item $\Delta B_{C_i}$ be the adjustment to balance of $C_i$
+\item $\theta_i$ be the target liquidity ratio for $C_i$
+\item $L_W = \sum_{i=1}^n B_{C_i}$ be the total liquidity managed by W
+\end{itemize}
+
+\subsection{Optimization Problem}
+For intra-WEC rebalancing:
+\begin{align*}
+\min_{\{\Delta B_{C_i}\}} \sum_{i=1}^n w_i(B_{C_i} + \Delta B_{C_i} - \theta_i L_W)^2 \\
+\text{subject to } \sum_{i=1}^n \Delta B_{C_i} = 0 \\
+-B_{C_i} \leq \Delta B_{C_i} \leq L_{C_i} - B_{C_i}, \forall i \in \{1, ..., n\}
+\end{align*}
+
+\section{Fraud Prevention}
+
+\begin{theorem}[Deterministic Conflict Resolution]
+Given conflicting channel states $S_1$ and $S_2$ with nonces $n_1$ and $n_2$ respectively:
+\[ \text{ValidState} = \begin{cases} 
+S_1 & \text{if } n_1 > n_2 \\
+S_2 & \text{if } n_2 > n_1 \\
+\text{HashMin}(S_1, S_2) & \text{if } n_1 = n_2
+\end{cases} \]
+\end{theorem}
+
+\begin{theorem}[50\% Spending Rule]
+For any single off-chain transaction amount $T$ in a channel with balance $B$:
+\[ T \leq \frac{B}{2} \]
+\end{theorem}
+
+\section{Storage Node Security and Battery Model}
+
+\subsection{Battery Charging Dynamics}
+Let $S$ be stake amount and $B$ be battery charge. The probability of malicious behavior is:
+\[ P(\text{malicious behavior}) \propto \frac{B}{S} \]
+
+\begin{theorem}[Battery Charging Efficiency]
+The rate of battery charging $\Delta C$ is proportional to synchronized overlapping nodes:
+\[ \Delta C \propto \sum_{i=1}^n \text{Overlap}(\text{node}, \text{node}_i) \]
+\end{theorem}
+
+\begin{theorem}[Optimal Reward Incentivization]
+The reward function $R(\text{node})$ is defined as:
+\[ R(\text{node}) = \begin{cases} 
+\text{MaxReward} & \text{if } 98 \leq \text{battery} \leq 100 \\
+\text{ProportionalReward} & \text{if } 80 \leq \text{battery} < 98 \\
+0 & \text{if } \text{battery} < 80
+\end{cases} \]
+where ProportionalReward = MaxReward $\times \frac{\text{battery}}{100}$
+\end{theorem}
+
+\section{Privacy and Zero-Knowledge Proofs}
+
+\subsection{Transaction Validation Circuit}
+Let $C_{\text{validation}}$ be the validation circuit with:
+\begin{itemize}
+\item oldState, newState: channel states
+\item tx: transaction data
+\item signature: transaction signature
+\item nonce: current nonce value
+\end{itemize}
+
+\begin{algorithm}
+\caption{Transaction Validation Circuit}
+\begin{algorithmic}[1]
+\STATE AssertChannelSeqnoMatch(seqno, oldState.seqno, newState.seqno)
+\STATE AssertValidSignature(tx, signature)
+\STATE AssertValidBalanceTransition(oldState, newState, tx)
+\STATE AssertValidNonceIncrement(oldNonce, newNonce)
+\STATE AssertValidStateTransition(oldState, newState)
+\end{algorithmic}
+\end{algorithm}
+
+\section{Cross-Shard Operations}
+
+\begin{theorem}[Cross-Shard Communication Complexity]
+Cross-shard operations have communication complexity $O(\log m)$, where $m$ is the number of shards.
+\end{theorem}
+
+\begin{proof}
+Let $T_{A,B}$ be a transaction from shard $S_A$ to shard $S_B$:
+\begin{enumerate}
+\item Each zk-SNARK proof has constant size
+\item Hypercube routing ensures message delivery in $O(\log m)$ hops
+\item Proof generation and verification times are constant
+\item Total communication complexity = $O(\log m)$
+\end{enumerate}
+\end{proof}
+
+\section{Hierarchical Tree Structure}
+
+\subsection{Merkle Tree Components}
+Let $T_W$ be the wallet state Merkle tree where:
+\begin{itemize}
+\item Each leaf represents a channel state: $\text{leaf}_i = H(S_i)$
+\item Leaf position determined by channel SEQNO
+\item Tree root included in each zk-SNARK proof
+\end{itemize}
+
+\begin{theorem}[Tamper-Evident History]
+For sequence of states $\{S_0, S_1, ..., S_n\}$ with proofs $\{P_0, P_1, ..., P_n\}$:
+\[ \forall i, \text{Verify}(P_i) \land \text{ValidTransition}(S_i, S_{i+1}) \]
+\end{theorem}
+
+\section{Balance Consistency and State Transitions}
+
+\subsection{Proof System Formalization}
+
+\begin{theorem}[State Transition Validity]
+For any state update $S_0 \rightarrow S_1$ with proof $P$, the transition is valid if:
+\[ \text{Verify}(P) \land \text{ValidWitness}(w) \land \text{Constraints}(S_0, S_1, w) \]
+where $w$ is the witness containing all private inputs.
+\end{theorem}
+
+\begin{definition}[Valid State Update]
+A state update is valid if accompanied by zk-SNARK proof $\pi$ verifying:
+\[ \begin{cases}
+\text{ValidTransition}(S_{\text{prev}} \rightarrow S_{\text{new}}) \\
+\text{ValidBalances}(S_{\text{new}}) \\
+\text{ValidSignatures}(S_{\text{new}}, \sigma) \\
+\text{NonceIncrement}(n_{\text{prev}}, n_{\text{new}})
+\end{cases} \]
+\end{definition}
+
+\subsection{Global State Consistency}
+
+\begin{theorem}[Global Consistency]
+Let $R_{M_{\text{global}}}$ be the global Merkle root. For any valid state update:
+\[ R_{M_{\text{global}}}^{\text{new}} = \text{UpdateGlobalRoot}(R_{M_{\text{global}}}, \{T_1,...,T_n\}) \]
+where $\{T_1,...,T_n\}$ are validated transactions.
+\end{theorem}
+
+\section{Liquidity and Channel Management}
+
+\subsection{Channel Balance Constraints}
+For channel $C$ with balance $B_C$:
+\[ \begin{align*}
+& 0 \leq B_C \leq L_C \text{ (Balance bounds)} \\
+& \sum_{i} B_{C_i} = L_{\text{total}} \text{ (Conservation)} \\
+& \Delta B_C \leq \frac{B_C}{2} \text{ (50\% spending rule)}
+\end{align*} \]
+
+\subsection{Battery Charging Model}
+For storage node $N$ with battery level $B_N$:
+\[ B_N^{\text{new}} = \begin{cases}
+\min(B_N + \Delta C, 100) & \text{if synchronized} \\
+\max(B_N - \Delta D, 0) & \text{otherwise}
+\end{cases} \]
+
+where:
+\[ \Delta C = k \sum_{i=1}^n \text{Overlap}(N, N_i) \]
+$k$ is the charging coefficient.
+
+\section{Cross-Shard Operations and Atomic Swaps}
+
+\subsection{Cross-Shard Transaction Proof}
+For transaction $T_{A,B}$ between shards $S_x$ and $S_y$:
+\[ \begin{align*}
+& \text{Verify}(\pi_a) \land \text{Verify}(\pi_b) = \text{true} \\
+& \Delta B_{IC_a} + \Delta B_{IC_b} = 0 \\
+& R_{M_{\text{global}}}^{\text{new}} = \text{UpdateRoot}(R_{M_{\text{global}}}, \{\Delta B_{IC_a}, \Delta B_{IC_b}\})
+\end{align*} \]
+
+\subsection{Atomic Swap Verification}
+For atomic swap between contracts $IC_a$ and $IC_b$:
+\[ \begin{align*}
+& h_{\text{source}} = \text{PoseidonHash}(R_{M_{\text{source}}}) \\
+& h_{\text{dest}} = \text{PoseidonHash}(R_{M_{\text{destination}}}) \\
+& \text{VerifyMerkleProof}(R_{M_{\text{global}}}, h_{\text{source}}, \text{proof}_{\text{source}}) \\
+& \text{VerifyMerkleProof}(R_{M_{\text{global}}}, h_{\text{dest}}, \text{proof}_{\text{dest}})
+\end{align*} \]
+
+\section{Hierarchical State Management}
+
+\subsection{State Update Propagation}
+For each level in hierarchy with state $S_l$ and proof $\pi_l$:
+\[ \begin{align*}
+& S_{l+1} = \text{UpdateState}(S_l, \Delta_l) \\
+& \pi_{l+1} = \text{GenerateProof}(S_l, S_{l+1}, \Delta_l) \\
+& R_{l+1} = \text{UpdateMerkleRoot}(R_l, h(S_{l+1}))
+\end{align*} \]
+
+\subsection{Inter-Contract Communication}
+For intermediate contracts $IC_i$ and $IC_j$:
+\[ \begin{align*}
+& \text{ValidTransfer}_{IC_i \rightarrow IC_j} \iff \\
+& \exists \pi: \text{Verify}(\pi) \land \text{ValidState}(S_{IC_i}) \land \text{ValidState}(S_{IC_j}) \\
+& \land \Delta B_{IC_i} + \Delta B_{IC_j} = 0
+\end{align*} \]
+
+\section{Channel State Verification}
+
+\subsection{State Transition Verification}
+For channel state transition $S_t \rightarrow S_{t+1}$:
+\[ \begin{align*}
+& h_t = \text{PoseidonHash}(S_t || \text{nonce}_t) \\
+& h_{t+1} = \text{PoseidonHash}(S_{t+1} || \text{nonce}_{t+1}) \\
+& \text{ValidTransition}(S_t, S_{t+1}) \iff \\
+& \exists \pi: \text{Verify}(\pi) \land \text{nonce}_{t+1} = \text{nonce}_t + 1 \\
+& \land \text{ValidBalanceUpdate}(S_t, S_{t+1})
+\end{align*} \]
+
+\subsection{Balance Conservation}
+For any sequence of transactions $\{T_1,...,T_n\}$:
+\[ \begin{align*}
+& \sum_{i=1}^n B_i^{\text{initial}} = \sum_{i=1}^n B_i^{\text{final}} \\
+& \forall i: B_i^{\text{final}} \geq 0 \\
+& \forall t \in T: \text{amount}(t) \leq \frac{B_{\text{sender}}}{2}
+\end{align*} \]
+
+\section{Storage Node Battery Mechanics}
+
+\subsection{Battery State Transitions}
+For storage node battery level $B$ and threshold $\theta$:
+\[ \begin{align*}
+& \text{RewardMultiplier}(B) = \begin{cases}
+1.0 & \text{if } B \geq 98 \\
+\frac{B}{100} & \text{if } 80 \leq B < 98 \\
+0 & \text{if } B < 80
+\end{cases} \\
+& \text{Reward} = \text{TransactionFees} \times \text{RewardMultiplier}(B) \times 0.10
+\end{align*} \]
+
+\subsection{Synchronization Efficiency}
+For nodes $N_i$ and $N_j$:
+\[ \begin{align*}
+& \text{SyncEfficiency}(N_i, N_j) = \frac{\text{SharedStates}(N_i, N_j)}{\text{TotalStates}(N_i)} \\
+& \Delta C_i = k \sum_{j \neq i} \text{SyncEfficiency}(N_i, N_j)
+\end{align*} \]
+
+\section{Channel Closure and Settlement}
+
+\subsection{Lazy Channel Closure}
+For channel $C$ with final state $S_f$:
+\[ \begin{align*}
+& h_{\text{final}} = \text{PoseidonHash}(\text{id}_{AB} || B_A || B_B) \\
+& \pi_{\text{closure}} = \text{GenerateClosureProof}(C, S_f) \\
+& \text{Valid}(\pi_{\text{closure}}) \implies B_A + B_B = \text{TotalBalance}_C
+\end{align*} \]
+
+\section{zk-SNARK Circuit Specifications}
+
+\subsection{Transaction Circuit Constraints}
+For transaction $T$ with states $S_{\text{old}}, S_{\text{new}}$:
+\[ \begin{align*}
+& C_1: \text{seqno}_{\text{new}} = \text{seqno}_{\text{old}} \\
+& C_2: \text{ValidSig}(\sigma, T) = 1 \\
+& C_3: B_{\text{sender}}^{\text{new}} = B_{\text{sender}}^{\text{old}} - \text{amount} \\
+& C_4: B_{\text{receiver}}^{\text{new}} = B_{\text{receiver}}^{\text{old}} + \text{amount} \\
+& C_5: \text{nonce}_{\text{new}} = \text{nonce}_{\text{old}} + 1
+\end{align*} \]
+
+\subsection{Proof Generation Complexity}
+For circuit with $n$ constraints:
+\[ \begin{align*}
+& T_{\text{gen}} = O(n) \text{ (Proof generation)} \\
+& T_{\text{ver}} = O(\log n) \text{ (Proof verification)} \\
+& \text{Memory}_{\text{prover}} = O(n) \text{ (Witness size)}
+\end{align*} \]
+
+\section{Cross-Contract Rebalancing}
+
+\subsection{Global Optimization Problem}
+For $k$ intermediate contracts:
+\[ \begin{align*}
+& \min_{\{\Delta B_{IC_i}\}} \sum_{i=1}^k v_i(B_{IC_i} + \Delta B_{IC_i} - \psi_i L_{\text{global}})^2 \\
+& \text{subject to } \sum_{i=1}^k \Delta B_{IC_i} = 0 \\
+& -B_{IC_i} \leq \Delta B_{IC_i} \leq L_{IC_i} - B_{IC_i}, \forall i \in \{1,...,k\}
+\end{align*} \]
+
+\subsection{Rebalancing Efficiency}
+\[ \begin{align*}
+& T_{\text{computational}} = O(k \log k) \\
+& T_{\text{communication}} = O(k + m) \\
+\text{where } & k = \text{number of intermediate contracts} \\
+& m = \text{number of shards}
+\end{align*} \]
+
+\section{Sparse Merkle Tree Operations}
+
+\subsection{Tree Update Functions}
+For leaf update at position $i$:
+\[ \begin{align*}
+& \text{leaf}_i = \text{Hash}(\text{channelID} || \text{state}) \\
+& \text{path}_i = \text{GetMerklePath}(\text{channelID}) \\
+& R_{\text{new}} = \text{ComputeNewRoot}(\text{leaf}_i, \text{path}_i) \\
+& \text{Complexity}_{\text{update}} = O(\log N)
+\end{align*} \]
+
+\section{Global State Consistency Verification}
+
+\subsection{State Verification Circuit}
+For global state $G$ with intermediate states $\{S_1,...,S_N\}$:
+\[ \begin{align*}
+& \forall i \in [1,N]: \\
+& h_i = \text{PoseidonHash}(S_i) \\
+& \text{ValidMerkleProof}(R_{M_{\text{global}}}, h_i, \pi_{M_i}) \\
+& \text{ValidState}(S_i): B_i \geq 0 \land B_i < 2^{64} \\
+& \text{SeqNo}_i \geq \text{PrevSeqNo}_i
+\end{align*} \]
+
+\subsection{Epoch Transition Verification}
+For epoch $E$ with transactions $\{T_1,...,T_M\}$:
+\[ \begin{align*}
+& \forall i \in [1,M]: \\
+& h_i = \text{PoseidonHash}(T_i) \\
+& \text{ValidMerkleProof}(R_{M_{\text{global}}}, h_i, \text{proof}_i) \\
+& B_{\text{sender}} \geq \text{amount}_i \\
+& E_{\text{new}} = E + 1
+\end{align*} \]
+
+\section{Hierarchical Balance Management}
+
+\subsection{Balance Tree Structure}
+For wallet contract $W$ with channels $\{C_1,...,C_n\}$:
+\[ \begin{align*}
+& \text{BalanceRoot}_W = \text{Hash}(\{B_{C_1},...,B_{C_n}\}) \\
+& \text{ValidBalanceTree}(W) \iff \\
+& \sum_{i=1}^n B_{C_i} = \text{TotalBalance}_W \\
+& \forall i: 0 \leq B_{C_i} \leq L_{C_i}
+\end{align*} \]
+
+\section{Protocol Security Properties}
+
+\subsection{Soundness Guarantee}
+\[ \begin{align*}
+& \forall \text{ adversary } \mathcal{A}: \\
+& \Pr[\text{Verify}(\pi^*) = 1 \land \neg\text{ValidStatement}(x)] \leq \text{negl}(\lambda) \\
+& \text{where } \lambda \text{ is the security parameter}
+\end{align*} \]
+
+\subsection{Privacy Guarantee}
+For transactions $T_1, T_2$ with same public inputs:
+\[ \begin{align*}
+& \text{View}_{\mathcal{A}}(\text{Prove}(T_1)) \approx_c \text{View}_{\mathcal{A}}(\text{Prove}(T_2)) \\
+& \text{where } \approx_c \text{ denotes computational indistinguishability}
+\end{align*} \]
+
+\section{Battery Charging Dynamics}
+
+\subsection{Advanced Battery Model}
+For storage node with synchronization status $\sigma$:
+\[ \begin{align*}
+& B_{\text{new}} = B + \Delta B \\
+& \Delta B = \begin{cases}
+\min(\Delta C \cdot \sum_{i=1}^n w_i\sigma_i, B_{\text{max}} - B) & \text{if synchronized} \\
+-\Delta D \cdot (1 - \frac{1}{n}\sum_{i=1}^n \sigma_i) & \text{otherwise}
+\end{cases}
+\end{align*} \]
+
+\section{Merkle Tree Layer Specifications}
+
+\subsection{Cross-Layer State Verification}
+For layers $L_1,...,L_k$ with respective roots $R_1,...,R_k$:
+\[ \begin{align*}
+& \forall i \in [1,k-1]: \\
+& R_{i+1} = \text{Hash}(\text{CombineRoots}(R_i, \Delta_i)) \\
+& \text{ValidLayerTransition}(L_i, L_{i+1}) \iff \\
+& \exists \pi_i: \text{Verify}(\pi_i) \land \text{ValidRootTransition}(R_i, R_{i+1})
+\end{align*} \]
+
+\section{Advanced Channel State Models}
+
+\subsection{Channel Evolution Functions}
+For channel $C$ with state $S_t$ at time $t$:
+\[ \begin{align*}
+& S_{t+1} = F(S_t, \Delta_t) \\
+& \text{where } F \text{ satisfies:} \\
+& \text{Conservation}: \sum B_i^{t+1} = \sum B_i^t \\
+& \text{Monotonicity}: \text{nonce}_{t+1} > \text{nonce}_t \\
+& \text{Validity}: \exists \pi: \text{Verify}(\pi, S_t, S_{t+1})
+\end{align*} \]
+
+\subsection{Channel Closure Conditions}
+For closure state $S_c$:
+\[ \begin{align*}
+& \text{ValidClosure}(S_c) \iff \\
+& \exists \text{ sequence } \{S_0,...,S_c\}: \\
+& \forall i \in [0,c-1]: \text{ValidTransition}(S_i, S_{i+1}) \\
+& \land \text{FinalizeSignatures}(\sigma_A, \sigma_B, S_c)
+\end{align*} \]
+
+\section{Advanced Storage Node Security}
+
+\subsection{Node Reliability Metrics}
+For node $N$ with history $H$:
+\[ \begin{align*}
+& R(N) = \alpha \cdot \text{SyncScore}(N) + \beta \cdot \text{UptimeScore}(N) \\
+& \text{where:} \\
+& \text{SyncScore}(N) = \frac{1}{|H|}\sum_{t \in H} \sigma_t \\
+& \text{UptimeScore}(N) = \frac{\text{ActiveTime}}{\text{TotalTime}}
+\end{align*} \]
+
+\subsection{Slashing Conditions}
+For malicious behavior detection:
+\[ \begin{align*}
+& \text{SlashAmount}(N) = \min(S_N, k \cdot \text{Severity}(v)) \\
+& \text{where:} \\
+& S_N \text{ is stake amount} \\
+& v \text{ is violation type} \\
+& k \text{ is severity multiplier}
+\end{align*} \]
+
+
+\section{BOCs and OP Codes Specifications}
+
+\subsection{Bag of Cells (BOC) Definition}
+\begin{definition}[Bag of Cells]
+A BOC is defined as a tuple $B = (V, E, C)$, where:
+\begin{itemize}
+\item $V$ is a finite set of vertices (cells)
+\item $E \subset V \times V$ is a set of directed edges forming a DAG
+\item $C: V \rightarrow D$ is a mapping from vertices to data/code objects
+\end{itemize}
+\end{definition}
+
+\begin{theorem}[Deterministic Execution Flow]
+Let $B = (V, E, C)$ be a BOC representing contract execution flow. If $B$ is a DAG, there exists a topological ordering of vertices $V$ such that each vertex $v_i$ is processed only after all predecessors, ensuring deterministic execution.
+\end{theorem}
+
+\subsection{State Serialization}
+\begin{definition}[State Serialization]
+Each contract state $S$ is represented as sequence $S = \{c_1, c_2, ..., c_n\}$, where each cell $c_i \in V$ represents distinct state information. State transitions $S_{i-1} \rightarrow S_i$ are serialized into BOCs and represented as SMT leaves.
+\end{definition}
+
+\subsection{BOC Serialization Format}
+Let $\text{Serialize}: B \rightarrow \{0,1\}^*$ map BOC to binary sequence:
+\[ \text{BOC}_{\text{serialized}} = \text{Header} || \text{CellData} || \text{References} \]
+where:
+\begin{itemize}
+\item Header contains metadata (magic number, flags, cell count)
+\item CellData contains cell content and type information
+\item References contain indices defining cell relationships
+\end{itemize}
+
+\section{OP Codes Specification}
+
+\subsection{OP Code Definition}
+\begin{definition}[OP Code]
+An OP code is a function $\text{OP}: (S, P) \rightarrow (S', R)$ where:
+\begin{itemize}
+\item $S$ is current contract state
+\item $P$ represents operation parameters
+\item $S'$ is updated state
+\item $R$ is operation result
+\end{itemize}
+\end{definition}
+
+\subsection{Contract Lifecycle Operations}
+\begin{definition}[Contract Creation]
+Let $\text{OP}_{\text{create}} \in O$ be the creation operation:
+\[ \text{OP}_{\text{create}}: (\emptyset, P_{\text{init}}) \rightarrow (S_1, R_1) \]
+\end{definition}
+
+\begin{definition}[State Transition]
+A state transition $T_i$ is defined as:
+\[ T_i: (S_{i-1}, \text{OP}_i) \rightarrow S_i \]
+\end{definition}
+
+\begin{definition}[Contract Termination]
+Let $\text{OP}_{\text{terminate}}$ be the termination operation:
+\[ \text{OP}_{\text{terminate}}: (S_n, P_{\text{term}}) \rightarrow (S_f, R_f) \]
+where $S_f$ is immutable terminal state.
+\end{definition}
+
+\subsection{Complexity Analysis}
+Total processing time for BOC with $n$ cells:
+\[ T_{\text{total}} = \sum_{i=1}^n T_{\text{op}_i} \]
+
+\section{Sparse Merkle Trees (SMTs)}
+
+\subsection{SMT Definition}
+\begin{definition}[Sparse Merkle Tree]
+An SMT is a tuple $(T, H, L)$ where:
+\begin{itemize}
+\item $T$ is binary tree of height $h$
+\item $H: D \times D \rightarrow D$ is cryptographic hash function
+\item $L \subseteq \{0,1\}^h \times D$ represents active leaves
+\end{itemize}
+\end{definition}
+
+\subsection{SMT Operations}
+For key $k$ update to value $v_i$ in SMT with root $r_{i-1}$:
+\begin{align*}
+l_k &= H(k \parallel v_i) \text{ (Leaf update)} \\
+p_j &= H(p_{j,\text{left}}, p_{j,\text{right}}) \text{ (Path update)} \\
+r_i &= \text{Updated root hash}
+\end{align*}
+
+\begin{definition}[Proof of Inclusion]
+A proof for key $k$ is sequence $(h_1, h_2, ..., h_h)$ of sibling hashes for root reconstruction.
+\end{definition}
+
+\subsection{Security Properties}
+\begin{theorem}[SMT Security]
+The probability of undetected tampering with SMT is negligible given collision-resistant hash function $H$.
+\end{theorem}
+
+\begin{theorem}[Computational Efficiency]
+Off-chain transaction processing complexity is $O(\log n)$ where $n$ is transaction count. On-chain cost is $O(1)$ per global state update.
+\end{theorem}
+
+\section{Channel-Specific Operations}
+
+\subsection{Channel State Updates}
+For channel $C_{A\rightarrow B}$ with state $S_i$:
+\[ \text{BOC}_{\text{tx}} = \{\text{OP}_{\text{CREATE\_TX}}, \{\text{sender}: A, \text{receiver}: B, \text{amount}: v\}\} \]
+
+State transition verification:
+\[ \pi_i = \text{SNARK.Prove}(\text{BOC}_{\text{tx}}, S_i(C_{A\rightarrow B})) \]
+
+New state computation:
+\[ S_{i+1}(C_{A\rightarrow B}) = \{B_A = B_A - v, B_B = B_B + v, n = n + 1\} \]
+
+
+
+
+
+
+
+
+\subsection{Intermediate Contract Level Operations}
+
+For intermediate contract IC managing channels ${C_1,...,C_n}$:
+\[ \text{BOC}_{\text{agg}} = \{\text{OP}_{\text{AGGREGATE\_STATES}}, \{C_i: S_j(C_i)\}_{i=1}^n\} \]
+
+SMT update for aggregated state:
+\[ \text{SMT}_{\text{IC}} = \text{SMT.Update}(\text{SMT}_{\text{IC}}, H(\text{BOC}_{\text{agg}})) \]
+
+\section{Channel Closure Protocol}
+
+\subsection{Closure BOC Generation}
+For channel closure operation:
+\[ \text{BOC}_{\text{close}} = \{\text{OP}_{\text{CLOSE\_CHANNEL}}, \{\text{channel}: C, \text{final\_state}: S_f(C)\}\} \]
+
+Closure proof generation:
+\[ \pi_{\text{close}} = \text{SNARK.Prove}(\text{BOC}_{\text{close}}, \{S_0,...,S_f\}) \]
+
+\subsection{Final Settlement}
+On-chain balance updates:
+\[ \begin{align*}
+B_A^{\text{onchain}} &= B_A^{\text{onchain}} + B_A^{\text{final}} \\
+B_B^{\text{onchain}} &= B_B^{\text{onchain}} + B_B^{\text{final}}
+\end{align*} \]
+
+\section{Advanced BOC Operations}
+
+\subsection{BOC State Transitions}
+Let $\mathcal{B}$ be set of all BOCs and $\mathcal{S}$ be set of all states:
+\[ \text{StateTransition}: \mathcal{B} \times \mathcal{S} \rightarrow \mathcal{S} \]
+
+Transition verification:
+\[ \text{ValidTransition}(S_i, S_{i+1}) \iff \exists \text{ BOC}_t: \text{StateTransition}(\text{BOC}_t, S_i) = S_{i+1} \]
+
+\subsection{BOC Composition}
+For BOCs $B_1, B_2$:
+\[ \text{Compose}(B_1, B_2) = (V_1 \cup V_2, E_1 \cup E_2 \cup E_{\text{new}}, C_1 \cup C_2) \]
+where $E_{\text{new}}$ represents new edges connecting $B_1$ and $B_2$.
+
+\section{SMT Path Verification}
+
+\subsection{Merkle Path Construction}
+For leaf $l$ with index $i$:
+\[ \text{Path}(l) = [(h_1, d_1),...,(h_h, d_h)] \]
+where:
+\begin{itemize}
+\item $h_j$ is sibling hash at level $j$
+\item $d_j \in \{0,1\}$ indicates left/right position
+\end{itemize}
+
+\subsection{Path Verification Algorithm}
+\begin{algorithm}
+\caption{SMT Path Verification}
+\begin{algorithmic}[1]
+\STATE \textbf{Input}: leaf $l$, path $[(h_1,d_1),...,(h_h,d_h)]$, root $r$
+\STATE $current \gets H(l)$
+\FOR{$j \gets 1$ to $h$}
+    \IF{$d_j = 0$}
+        \STATE $current \gets H(current \parallel h_j)$
+    \ELSE
+        \STATE $current \gets H(h_j \parallel current)$
+    \ENDIF
+\ENDFOR
+\RETURN $current = r$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Epidemic State Overlap}
+
+\subsection{Storage Node Battery Model}
+For storage node $N$ with synchronization status $\sigma$:
+\[ B_{\text{new}} = \begin{cases}
+\min(B + \Delta C \cdot \sum_{i=1}^n w_i\sigma_i, B_{\text{max}}) & \text{if synchronized} \\
+\max(B - \Delta D \cdot (1 - \frac{1}{n}\sum_{i=1}^n \sigma_i), 0) & \text{otherwise}
+\end{cases} \]
+
+\subsection{Overlap Coefficient}
+For nodes $N_i, N_j$:
+\[ \text{Overlap}(N_i, N_j) = \frac{|\text{States}(N_i) \cap \text{States}(N_j)|}{|\text{States}(N_i)|} \]
+
+\subsection{Redundancy Factor}
+For state $s$:
+\[ R(s) = |\{N : s \in \text{States}(N)\}| \]
+
+Target redundancy condition:
+\[ \forall s: R(s) \geq k \]
+where $k$ is minimum redundancy factor.
+
+\section{Cross-Contract Communication}
+
+\subsection{Message Passing Protocol}
+For contracts $C_1, C_2$:
+\[ \text{BOC}_{\text{msg}} = \{\text{OP}_{\text{SEND\_MESSAGE}}, \{src: C_1, dst: C_2, payload: m\}\} \]
+
+Message verification:
+\[ \pi_{\text{msg}} = \text{SNARK.Prove}(\text{BOC}_{\text{msg}}, S(C_1)) \]
+
+\subsection{Cross-Contract State Updates}
+State update propagation:
+\[ S'(C_2) = \text{UpdateState}(S(C_2), \text{BOC}_{\text{msg}}, \pi_{\text{msg}}) \]
+
+
+
+
+\section{Advanced SMT Operations}
+
+\subsection{Batch Update Optimization}
+For multiple updates $U = \{(k_1,v_1),...,(k_n,v_n)\}$:
+\[ \text{BatchUpdate}(T, U) = \text{Optimize}(\{\text{Update}(T,k_i,v_i) : (k_i,v_i) \in U\}) \]
+
+Complexity reduction:
+\[ T_{\text{batch}} = O(\log N + n) < n \cdot O(\log N) = T_{\text{individual}} \]
+
+\subsection{Proof Aggregation}
+For multiple proofs $\{\pi_1,...,\pi_n\}$:
+\[ \pi_{\text{agg}} = \text{AggregateProofs}(\{\pi_i\}_{i=1}^n) \]
+
+Size efficiency:
+\[ |\pi_{\text{agg}}| = O(\log n) + c \ll \sum_{i=1}^n |\pi_i| \]
+
+\section{BOC State Management}
+
+\subsection{State Transition Verification}
+For state sequence $\{S_0,...,S_n\}$:
+\[ \text{ValidSequence}(\{S_i\}_{i=0}^n) \iff \forall i: \exists \text{ BOC}_i: \text{ValidTransition}(S_i, S_{i+1}, \text{BOC}_i) \]
+
+\subsection{BOC Composition Rules}
+Composition validity:
+\[ \text{ValidCompose}(B_1, B_2) \iff \nexists \text{ cycle in } E_1 \cup E_2 \cup E_{\text{new}} \]
+
+\subsection{Execution Flow Optimization}
+For BOC execution sequence:
+\[ T_{\text{opt}} = \text{TopologicalSort}(V, E) \]
+
+Parallel execution potential:
+\[ P(v) = \{u \in V : \text{NoPath}(u,v) \land \text{NoPath}(v,u)\} \]
+
+\section{Advanced Channel Operations}
+
+\subsection{Multi-Channel State Synchronization}
+For channels $\{C_1,...,C_n\}$:
+\[ \text{SyncState}(\{C_i\}_{i=1}^n) = \{\text{BOC}_{\text{sync}}, \pi_{\text{sync}}\} \]
+
+where:
+\[ \begin{align*}
+\text{BOC}_{\text{sync}} &= \{\text{OP}_{\text{SYNC}}, \{S(C_i)\}_{i=1}^n\} \\
+\pi_{\text{sync}} &= \text{SNARK.Prove}(\text{BOC}_{\text{sync}}, \{\text{History}(C_i)\}_{i=1}^n)
+\end{align*} \]
+
+\subsection{Channel Rebalancing}
+Balance adjustment operation:
+\[ \Delta B_{ij} = \min(B_i - \theta_{\text{min}}, \theta_{\text{max}} - B_j) \]
+
+Rebalancing constraint:
+\[ \sum_{i,j} \Delta B_{ij} = 0 \]
+
+\section{Storage Node Management}
+
+\subsection{Battery Charging Dynamics}
+Extended battery model:
+\[ B_{t+1} = f(B_t, \sigma_t, w_t) \]
+
+where:
+\[ f(B,\sigma,w) = \begin{cases}
+B + \alpha \cdot g(\sigma) \cdot h(w) & \text{if synchronized} \\
+B - \beta \cdot (1-g(\sigma)) \cdot h(w) & \text{otherwise}
+\end{cases} \]
+
+Functions:
+\[ \begin{align*}
+g(\sigma) &= \frac{1}{n}\sum_{i=1}^n w_i\sigma_i \\
+h(w) &= \sqrt{\sum_{i=1}^n w_i^2}
+\end{align*} \]
+
+\subsection{Node Selection Algorithm}
+Selection probability:
+\[ P(N_i) = \frac{B_i \cdot R_i \cdot S_i}{\sum_{j} B_j \cdot R_j \cdot S_j} \]
+
+where:
+\begin{itemize}
+\item $B_i$ is battery level
+\item $R_i$ is reliability score
+\item $S_i$ is stake amount
+\end{itemize}
+
+\section{Advanced Proof Systems}
+
+\subsection{Recursive SNARK Construction}
+For proof sequence $\{\pi_1,...,\pi_n\}$:
+\[ \pi_{\text{recursive}} = \text{Fold}(\{\pi_i\}_{i=1}^n, \text{CombineProofs}) \]
+
+where:
+\[ \text{CombineProofs}(\pi_i, \pi_{i+1}) = \text{SNARK.Prove}(\text{Valid}(\pi_i) \land \text{Valid}(\pi_{i+1})) \]
+
+\subsection{Proof Compression}
+Compression ratio:
+\[ \rho = \frac{|\pi_{\text{compressed}}|}{|\pi_{\text{original}}|} \]
+
+Compression guarantee:
+\[ \text{Verify}(\pi_{\text{original}}) = \text{Verify}(\text{Decompress}(\pi_{\text{compressed}})) \]
+
+\section{Epidemic State Propagation}
+
+\subsection{State Propagation Model}
+For nodes $N_i$ with state sets $S_i$:
+\[ \text{PropagationRate}(s) = \beta \sum_{i=1}^n \frac{|S_i \cap \{s\}|}{|N|} \cdot (1 - \frac{|S_i \cap \{s\}|}{|N|}) \]
+
+State acquisition probability:
+\[ P(\text{acquire}_{i,s}) = 1 - (1 - \gamma)^{|\{j: s \in S_j \land \text{Connected}(i,j)\}|} \]
+
+\section{Channel Security Properties}
+
+\subsection{Double-Spend Prevention}
+For channel $C$ with states $\{S_1,...,S_n\}$:
+\[ \forall i,j: \text{Valid}(S_i) \land \text{Valid}(S_j) \implies \text{Compatible}(S_i, S_j) \]
+
+where:
+\[ \text{Compatible}(S_i, S_j) \iff |S_i.\text{nonce} - S_j.\text{nonce}| \leq 1 \]
+
+\subsection{Balance Conservation}
+Balance invariant:
+\[ \forall t: \sum_{i} B_i^t = \sum_{i} B_i^0 \]
+
+Transfer validity:
+\[ \forall \text{transfer}(s,r,v): B_s \geq v \land B_s' = B_s - v \land B_r' = B_r + v \]
+
+\section{Advanced BOC Processing}
+
+\subsection{BOC Merge Operations}
+For BOCs $B_1, B_2$ with overlapping states:
+\[ \text{Merge}(B_1, B_2) = (V_1 \cup V_2, E_1 \cup E_2 \cup E_{\text{cross}}, C_{\text{merged}}) \]
+
+where:
+\[ C_{\text{merged}}(v) = \begin{cases}
+C_1(v) & \text{if } v \in V_1 \setminus V_2 \\
+C_2(v) & \text{if } v \in V_2 \setminus V_1 \\
+\text{Resolve}(C_1(v), C_2(v)) & \text{if } v \in V_1 \cap V_2
+\end{cases} \]
+
+\subsection{BOC Optimization}
+Cell reduction:
+\[ \text{Optimize}(B) = (V', E', C') \]
+
+where:
+\[ V' = \{v \in V : \text{Essential}(v)\} \]
+
+Essentiality criterion:
+\[ \text{Essential}(v) \iff \exists \text{ path } p: \text{root} \rightarrow v \rightarrow \text{leaf} \]
+
+\section{SMT Advanced Operations}
+
+\subsection{Multi-Proof Generation}
+For leaves $L = \{l_1,...,l_n\}$:
+\[ \pi_{\text{multi}} = \text{GenerateMultiProof}(T, L) \]
+
+Size efficiency:
+\[ |\pi_{\text{multi}}| = O(h + n\log(\frac{N}{n})) \]
+
+\subsection{Incremental Root Calculation}
+For sequence of updates $U = \{u_1,...,u_n\}$:
+\[ r_i = \text{UpdateRoot}(r_{i-1}, u_i, \text{AffectedPath}(u_i)) \]
+
+Path optimization:
+\[ \text{AffectedPath}(u_i) = \{p \in \text{Path}(u_i) : \text{Changed}(p, u_i)\} \]
+
+\section{Advanced Battery Mechanics}
+
+\subsection{Dynamic Battery Parameters}
+Adjustment coefficients:
+\[ \begin{align*}
+\alpha_t &= \alpha_0 \cdot (1 + \delta_{\alpha} \cdot \text{NetworkLoad}_t) \\
+\beta_t &= \beta_0 \cdot (1 + \delta_{\beta} \cdot \text{NetworkStress}_t)
+\end{align*} \]
+
+Network metrics:
+\[ \begin{align*}
+\text{NetworkLoad}_t &= \frac{\text{ActiveTransactions}_t}{\text{MaxCapacity}} \\
+\text{NetworkStress}_t &= \frac{\text{FailedSyncs}_t}{\text{TotalSyncs}_t}
+\end{align*} \]
+
+\subsection{Battery Recovery Model}
+Recovery rate:
+\[ R(B_t) = r_{\text{base}} \cdot (1 - \frac{B_t}{B_{\text{max}}}) \cdot \text{SyncQuality} \]
+
+Sync quality metric:
+\[ \text{SyncQuality} = \prod_{i=1}^n (1 - \epsilon_i) \]
+
+where $\epsilon_i$ is error rate for sync $i$.
+
+
+
+\section{Epidemic State Propagation}
+\subsection{Advanced Propagation Models}
+\begin{theorem}[State Propagation Efficiency]
+For a network with $n$ storage nodes and propagation rate $\beta$, the expected time $T$ to reach network consistency is:
+\[ T = O(\frac{\log n}{\beta}) \]
+when nodes maintain at least $k$ connections where $k = O(\log n)$.
+\end{theorem}
+
+\subsection{Battery Model Extensions}
+Extended charging dynamics with network conditions:
+\[ \begin{align*}
+\alpha_{\text{adj}} &= \alpha_{\text{base}} \cdot \prod_{i=1}^n (1 + \gamma_i \cdot \text{NodePerformance}_i) \\
+\text{NodePerformance}_i &= \frac{\text{SuccessfulSyncs}_i}{\text{TotalSyncAttempts}_i} \cdot \frac{\text{OnlineTime}_i}{\text{TotalTime}}
+\end{align*} \]
+
+\section{Storage Network Security}
+\subsection{Redundancy Analysis}
+For any state $s$ in the network:
+\[ P(\text{StateLoss}) \leq (1-p)^r \]
+where:
+\begin{itemize}
+\item $p$ is probability of individual node availability
+\item $r$ is redundancy factor
+\end{itemize}
+
+\subsection{Epidemic Overlap Properties}
+\begin{theorem}[Overlap Security]
+Given storage nodes $N_1,...,N_k$ with overlapping states:
+\[ \text{SecurityLevel} = 1 - \prod_{i=1}^k (1 - \text{Reliability}(N_i)) \]
+where $\text{Reliability}(N_i)$ is the reliability score of node $i$.
+\end{theorem}
+
+\section{BOC Advanced Properties}
+\subsection{BOC Composition Theorem}
+\begin{theorem}[Secure BOC Composition]
+For BOCs $B_1, B_2$ with security parameters $\lambda_1, \lambda_2$:
+\[ \text{Security}(B_1 \circ B_2) \geq \min(\lambda_1, \lambda_2) \]
+where $\circ$ denotes secure composition.
+\end{theorem}
+
+
+\end{document}
