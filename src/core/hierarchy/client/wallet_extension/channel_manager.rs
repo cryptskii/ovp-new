@@ -1,23 +1,22 @@
-use crate::core::types::ovp_ops::ChannelManagerOpCode;
-use crate::core::types::ovp_types::{
-    Channel, ChannelConfig, ChannelState, RebalanceRequest, SystemError,
-};
-use crate::core::zkps::zkp::ZkProofSystem;
+use crate::core::hierarchy::client::channel::channel_contract::*;
+use crate::core::types::ovp_ops::*;
+use crate::core::zkps::plonky2::Plonky2System;
+use crate::core::zkps::proof::{ProofMetadataJS, ProofType, ZkProof};
+use crate::core::zkps::zkp_interface::*;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 
 pub struct ChannelManager<StateManager> {
-    channels: HashMap<[u8; 32], Arc<RwLock<Channel>>>,
+    channels: HashMap<[u8; 32], Arc<RwLock<ChannelContract>>>,
     state_manager: Arc<RwLock<StateManager>>,
-    proof_system: Arc<ZkProofSystem>,
+    proof_system: Arc<Plonky2System>,
     wallet_id: [u8; 32],
-    state_history: Vec<ChannelState>,
+    state_history: Vec<ChannelContract>,
     spending_limit: u64,
 }
-
 impl<StateManager> ChannelManager<StateManager> {
-    pub fn new(state_manager: Arc<RwLock<StateManager>>, proof_system: Arc<ZkProofSystem>) -> Self {
+    pub fn new(state_manager: Arc<RwLock<StateManager>>, proof_system: Arc<Plonky2System>) -> Self {
         Self {
             channels: HashMap::new(),
             state_manager,
@@ -30,7 +29,7 @@ impl<StateManager> ChannelManager<StateManager> {
 
     pub fn new_with_wallet(
         state_manager: Arc<RwLock<StateManager>>,
-        proof_system: Arc<ZkProofSystem>,
+        proof_system: Arc<Plonky2System>,
         wallet_id: [u8; 32],
         spending_limit: u64,
     ) -> Self {
@@ -44,19 +43,15 @@ impl<StateManager> ChannelManager<StateManager> {
         }
     }
 
-    pub async fn dispatch(
-        &self,
-        op_code: ChannelManagerOpCode,
-        params: Vec<u8>,
-    ) -> Result<Vec<u8>> {
+    pub async fn dispatch(&self, op_code: ChannelOpCode, params: Vec<u8>) -> Result<Vec<u8>> {
         match op_code {
-            ChannelManagerOpCode::GetChannel => {
+            ChannelOpCode::GetChannel => {
                 // Decode parameters as necessary (e.g., channel_id)
                 let channel_id = decode_channel_id(&params)?;
                 self.get_channel(channel_id)
                     .map(|channel| serialize_channel(channel))
             }
-            ChannelManagerOpCode::CreateChannel => {
+            ChannelOpCode::InitChannel => {
                 // Extract parameters like sender, recipient, initial balance, config
                 let (sender, recipient, initial_balance, config) = decode_create_params(&params)?;
                 let channel_id = self.create_channel(sender, recipient, initial_balance, config)?;
@@ -68,7 +63,7 @@ impl<StateManager> ChannelManager<StateManager> {
                 self.manage_channel(channel_id, channel_state)?;
                 Ok(vec![])
             }
-            ChannelManagerOpCode::CloseChannel => {
+            WalletOpCode::CloseChannel => {
                 let channel_id = decode_channel_id(&params)?;
                 self.close_channel(channel_id)?;
                 Ok(vec![])

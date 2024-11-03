@@ -1,6 +1,8 @@
 // src/core/client/client_wallet_tree.rs
 
-use crate::core::types::ovp_types::{ChannelState, Transaction};
+use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::{
+    ChannelState, Transaction,
+};
 
 pub struct TreeManager;
 

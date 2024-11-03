@@ -1,10 +1,9 @@
 // client_proof_exporter.rs
 // This module is responsible for exporting the wallet root and its associated proof in a BOC (Bag of Cells) format for submission to the intermediate layer.
 
-use crate::core::state::boc::cell::Cell;
-use crate::core::types::BuilderData;
-use crate::core::ProofType;
-use crate::core::ZkProof;
+use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::BOC;
+use crate::core::zkps::circuit_builder::BuilderData;
+use crate::core::zkps::proof::ZkProof;
 use serde::{Deserialize, Serialize};
 use sha2::Digest;
 

@@ -1,7 +1,9 @@
 // src/core/hierarchy/client/wallet_extension/state_tracking.rs
 
 use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
-use crate::core::types::ovp_types::*;
+use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::{
+    StateTransition, BOC,
+};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};

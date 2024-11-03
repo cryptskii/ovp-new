@@ -1,8 +1,10 @@
-use crate::core::hierarchy::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
-use crate::core::types::ovp_types::Transaction;
-use crate::core::types::{SystemError, WalletBalanceTracker};
-use crate::core::zkp::plonky2::Plonky2System;
-use crate::core::zkp::proof::{ProofType, ZkProof};
+use crate::core::error::errors::SystemError;
+use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
+use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::{
+    Transaction, WalletBalanceTracker,
+};
+use crate::core::zkps::plonky2::Plonky2System;
+use crate::core::zkps::proof::{ProofType, ZkProof};
 use sha2::{Digest, Sha256};
 use std::sync::{Arc, Mutex};
 

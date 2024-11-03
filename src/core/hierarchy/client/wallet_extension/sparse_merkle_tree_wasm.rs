@@ -9,11 +9,16 @@ const TREE_HEIGHT: usize = 256;
 const EMPTY_NODE: [u8; 32] = [0; 32];
 
 /// This struct represents a Sparse Merkle Tree (SMT) data structure in the context of the WebAssembly (WASM) environment.  
+
+#[wasm_bindgen]
+#[derive(Clone, Debug)]
 pub struct SparseMerkleTreeWasm {
     root_hash: [u8; 32],
     nodes: Vec<[u8; 32]>,
 }
 
+#[wasm_bindgen]
+#[derive(Clone, Debug)]
 pub struct LeafNodeWasm {
     hash: [u8; 32],
     value: Option<Vec<u8>>,

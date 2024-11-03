@@ -1,6 +1,8 @@
 // src/core/hierarchy/client/wallet_extension/grouping.rs
 
-use crate::core::types::ovp_types::*;
+use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::{
+    ChannelGroup, ChannelGrouping,
+};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, RwLock};
 

@@ -1,5 +1,3 @@
-// src/errors/errors.rs
-
 use std::fmt;
 use std::io;
 
@@ -31,8 +29,72 @@ pub enum Error {
     StorageError(String),
     StakeError(String),
     NetworkError(String),
-    ChargingTooFrequent,         // Add this variant
-    MaxChargingAttemptsExceeded, // Add this variant
+    ChargingTooFrequent,
+    MaxChargingAttemptsExceeded,
+    CellError(CellError),
+    ZkProofError(ZkProofError),
+    BocError(BocError),
+    SystemError(SystemError),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SystemErrorType {
+    InvalidTransaction,
+    InvalidNonce,
+    InvalidSequence,
+    InvalidAmount,
+    InsufficientBalance,
+    SpendingLimitExceeded,
+}
+
+impl fmt::Display for SystemErrorType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidTransaction => write!(f, "Invalid transaction"),
+            Self::InvalidNonce => write!(f, "Invalid nonce"),
+            Self::InvalidSequence => write!(f, "Invalid sequence"),
+            Self::InvalidAmount => write!(f, "Invalid amount"),
+            Self::InsufficientBalance => write!(f, "Insufficient balance"),
+            Self::SpendingLimitExceeded => write!(f, "Spending limit exceeded"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SystemError {
+    pub error_type: SystemErrorType,
+    pub message: String,
+}
+
+impl SystemError {
+    pub fn new(error_type: SystemErrorType, message: String) -> Self {
+        Self {
+            error_type,
+            message,
+        }
+    }
+
+    pub fn error_type(&self) -> SystemErrorType {
+        self.error_type
+    }
+
+    pub fn message(&self) -> &str {
+        &self.message
+    }
+}
+
+impl fmt::Display for SystemError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.error_type, self.message)
+    }
+}
+
+impl std::error::Error for SystemError {}
+
+impl From<SystemError> for Error {
+    fn from(err: SystemError) -> Self {
+        Error::SystemError(err)
+    }
 }
 
 #[derive(Debug)]
@@ -60,6 +122,7 @@ impl From<io::Error> for CellError {
     }
 }
 
+#[derive(Debug)]
 pub enum ZkProofError {
     InvalidProof,
     InvalidProofData,
@@ -69,6 +132,7 @@ pub enum ZkProofError {
     InvalidProofDataPublicKey,
     InvalidProofDataHash,
 }
+
 impl fmt::Display for ZkProofError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -80,75 +144,6 @@ impl fmt::Display for ZkProofError {
             ZkProofError::InvalidProofDataPublicKey => write!(f, "Invalid proof data public key"),
             ZkProofError::InvalidProofDataHash => write!(f, "Invalid proof data hash"),
         }
-    }
-}
-
-impl std::error::Error for CellError {}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::IoError(err) => write!(f, "IO error: {}", err),
-            Error::SerializationError(err) => write!(f, "Serialization error: {}", err),
-            Error::DeserializationError(err) => write!(f, "Deserialization error: {}", err),
-            Error::InvalidProof => write!(f, "Invalid proof"),
-            Error::UnknownContract => write!(f, "Unknown contract"),
-            Error::InvalidTransaction => write!(f, "Invalid transaction"),
-            Error::InvalidSignature => write!(f, "Invalid signature"),
-            Error::InvalidPublicKey => write!(f, "Invalid public key"),
-            Error::InvalidAddress => write!(f, "Invalid address"),
-            Error::InvalidAmount => write!(f, "Invalid amount"),
-            Error::InvalidChannel => write!(f, "Invalid channel"),
-            Error::InvalidNonce => write!(f, "Invalid nonce"),
-            Error::InvalidSequence => write!(f, "Invalid sequence"),
-            Error::InvalidTimestamp => write!(f, "Invalid timestamp"),
-            Error::BatteryError => write!(f, "Battery error"),
-            Error::WalletError(err) => write!(f, "Wallet error: {}", err),
-            Error::InvalidProofData => write!(f, "Invalid proof data"),
-            Error::InvalidProofDataLength => write!(f, "Invalid proof data length"),
-            Error::InvalidProofDataFormat => write!(f, "Invalid proof data format"),
-            Error::InvalidProofDataSignature => write!(f, "Invalid proof data signature"),
-            Error::InvalidProofDataPublicKey => write!(f, "Invalid proof data public key"),
-            Error::InvalidProofDataHash => write!(f, "Invalid proof data hash"),
-            Error::ChannelNotFound => write!(f, "Channel not found"),
-            Error::StorageError(err) => write!(f, "Storage error: {}", err),
-            Error::StakeError(err) => write!(f, "Stake error: {}", err),
-            Error::NetworkError(err) => write!(f, "Network error: {}", err),
-            Error::ChargingTooFrequent => write!(f, "Charging too frequent"),
-            Error::MaxChargingAttemptsExceeded => write!(f, "Max charging attempts exceeded"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl Error {
-    pub fn from_io_error(err: io::Error) -> Self {
-        Error::IoError(err)
-    }
-}
-
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self {
-        Error::IoError(err)
-    }
-}
-
-impl From<serde_json::Error> for Error {
-    fn from(err: serde_json::Error) -> Self {
-        Error::SerializationError(err.to_string())
-    }
-}
-
-impl From<CellError> for Error {
-    fn from(err: CellError) -> Self {
-        Error::CellError(err)
-    }
-}
-
-impl From<ZkProofError> for Error {
-    fn from(err: ZkProofError) -> Self {
-        Error::ZkProofError(err)
     }
 }
 
@@ -187,8 +182,118 @@ impl fmt::Display for BocError {
     }
 }
 
+impl std::error::Error for CellError {}
+impl std::error::Error for ZkProofError {}
+impl std::error::Error for BocError {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::IoError(err) => write!(f, "IO error: {}", err),
+            Error::SerializationError(err) => write!(f, "Serialization error: {}", err),
+            Error::DeserializationError(err) => write!(f, "Deserialization error: {}", err),
+            Error::InvalidProof => write!(f, "Invalid proof"),
+            Error::UnknownContract => write!(f, "Unknown contract"),
+            Error::InvalidTransaction => write!(f, "Invalid transaction"),
+            Error::InvalidSignature => write!(f, "Invalid signature"),
+            Error::InvalidPublicKey => write!(f, "Invalid public key"),
+            Error::InvalidAddress => write!(f, "Invalid address"),
+            Error::InvalidAmount => write!(f, "Invalid amount"),
+            Error::InvalidChannel => write!(f, "Invalid channel"),
+            Error::InvalidNonce => write!(f, "Invalid nonce"),
+            Error::InvalidSequence => write!(f, "Invalid sequence"),
+            Error::InvalidTimestamp => write!(f, "Invalid timestamp"),
+            Error::BatteryError => write!(f, "Battery error"),
+            Error::WalletError(err) => write!(f, "Wallet error: {}", err),
+            Error::InvalidProofData => write!(f, "Invalid proof data"),
+            Error::InvalidProofDataLength => write!(f, "Invalid proof data length"),
+            Error::InvalidProofDataFormat => write!(f, "Invalid proof data format"),
+            Error::InvalidProofDataSignature => write!(f, "Invalid proof data signature"),
+            Error::InvalidProofDataPublicKey => write!(f, "Invalid proof data public key"),
+            Error::InvalidProofDataHash => write!(f, "Invalid proof data hash"),
+            Error::ChannelNotFound => write!(f, "Channel not found"),
+            Error::StorageError(err) => write!(f, "Storage error: {}", err),
+            Error::StakeError(err) => write!(f, "Stake error: {}", err),
+            Error::NetworkError(err) => write!(f, "Network error: {}", err),
+            Error::ChargingTooFrequent => write!(f, "Charging too frequent"),
+            Error::MaxChargingAttemptsExceeded => write!(f, "Max charging attempts exceeded"),
+            Error::CellError(err) => write!(f, "Cell error: {}", err),
+            Error::ZkProofError(err) => write!(f, "ZK proof error: {}", err),
+            Error::BocError(err) => write!(f, "BOC error: {}", err),
+            Error::SystemError(err) => write!(f, "System error: {}", err),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+// From implementations
+impl From<io::Error> for Error {
+    fn from(err: io::Error) -> Self {
+        Error::IoError(err)
+    }
+}
+
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Error::SerializationError(err.to_string())
+    }
+}
+
+impl From<CellError> for Error {
+    fn from(err: CellError) -> Self {
+        Error::CellError(err)
+    }
+}
+
+impl From<ZkProofError> for Error {
+    fn from(err: ZkProofError) -> Self {
+        Error::ZkProofError(err)
+    }
+}
+
 impl From<BocError> for Error {
     fn from(err: BocError) -> Self {
         Error::BocError(err)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_system_error_display() {
+        let error = SystemError::new(
+            SystemErrorType::InvalidTransaction,
+            "Transaction validation failed".to_string(),
+        );
+        assert_eq!(
+            error.to_string(),
+            "Invalid transaction: Transaction validation failed"
+        );
+    }
+
+    #[test]
+    fn test_error_conversions() {
+        let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
+        let error: Error = io_err.into();
+        assert!(matches!(error, Error::IoError(_)));
+
+        let system_err = SystemError::new(
+            SystemErrorType::InvalidNonce,
+            "Invalid nonce value".to_string(),
+        );
+        let error: Error = system_err.into();
+        assert!(matches!(error, Error::SystemError(_)));
+    }
+
+    #[test]
+    fn test_error_display() {
+        let error = Error::InvalidProof;
+        assert_eq!(error.to_string(), "Invalid proof");
+
+        let error = Error::WalletError("Balance too low".to_string());
+        assert_eq!(error.to_string(), "Wallet error: Balance too low");
     }
 }

@@ -1,8 +1,9 @@
 // src/core/hierarchy/client/wallet_extension/wallet_extension.rs
 
-use crate::core::circuit_builder::Circuit;
+use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
+use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::*;
 use crate::core::types::ovp_ops::WalletOpCode;
-use crate::core::types::ovp_types::*;
+use crate::core::zkps::circuit_builder::Circuit;
 use js_sys::{Date, Promise, Uint8Array};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -10,8 +11,6 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
-
-use super::SparseMerkleTreeWasm;
 
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT: &'static str = r#"
