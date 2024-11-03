@@ -1,0 +1,12 @@
+{
+    "[rust]": {
+        "editor.formatOnSave": true,
+        "editor.defaultFormatter": "rust-lang.rust-analyzer"
+    },
+    "rust-analyzer.linkedProjects": [
+        "./Cargo.toml"
+    ],
+    "rust-analyzer.checkOnSave.command": "clippy", // or "check" to only check current file
+    "rust-analyzer.checkOnSave.allTargets": true, // check all targets
+    "rust-analyzer.checkOnSave.allFeatures": true // check all features
+}

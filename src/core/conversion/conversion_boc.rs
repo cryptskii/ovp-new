@@ -2,7 +2,7 @@
 
 use crate::core::types::ovp_types::{Cell, CellData, SliceData};
 use crate::core::types::CellType;
-use crate::serde_wasm_bindgen::Error as SerdeWasmBindgenError;
+use serde_wasm_bindgen::Error as SerdeWasmBindgenError;
 /// Deserializes a cell from BOC format to structured `CellData`.
 pub fn deserialize_cell<T, E>(cell: &Cell) -> Result<T, E>
 where

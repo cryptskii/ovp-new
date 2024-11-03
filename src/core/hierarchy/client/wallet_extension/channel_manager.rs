@@ -2,7 +2,7 @@ use crate::core::types::ovp_ops::ChannelManagerOpCode;
 use crate::core::types::ovp_types::{
     Channel, ChannelConfig, ChannelState, RebalanceRequest, SystemError,
 };
-use crate::core::zkp::zkp::{ZkProof, ZkProofSystem};
+use crate::core::zkps::zkp::ZkProofSystem;
 use anyhow::Result;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
