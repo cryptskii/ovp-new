@@ -3,16 +3,11 @@
 use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
 use crate::core::types::boc::BOC;
 use crate::core::zkps::plonky2::Plonky2System;
-use crate::core::zkps::proof::{ProofMetadataJS, ProofType, ZkProof};
+use crate::core::zkps::proof::ZkProof;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-/// Imports the `BuilderData` and `CircuitBuilder` types from the `crate::core::zkps::circuit_builder` module.
-///
-/// These types are likely used for constructing and managing ZK circuits as part of the wallet extension functionality.
-use ton_types::BuilderData;
 
 // Define the Transaction struct
-
 #[derive(Debug, Clone)]
 pub struct Transaction {
     pub sender: [u8; 32],
@@ -40,7 +35,7 @@ pub struct WalletExtension {
     pub channels: HashMap<[u8; 32], Arc<RwLock<Channel>>>,
     pub total_locked_balance: u64,
     pub rebalance_config: RebalanceConfig,
-    pub proof_system: Arc<Plonky2System>,
+    pub proof_system: Arc<dyn std::fmt::Debug + Send + Sync>,
     pub state_tree: SparseMerkleTreeWasm,
     pub encrypted_states: WalletStorageManager,
     pub balance_tracker: WalletBalanceTracker,
@@ -55,11 +50,10 @@ pub struct Channel {
     pub participants: Vec<[u8; 32]>,
     pub config: ChannelConfig,
     pub spending_limit: u64,
-    pub proof_system: Arc<ZkProofSystem>,
+    pub proof_system: Arc<dyn std::fmt::Debug + Send + Sync>,
     pub(crate) boc_history: Vec<BOC>,
     pub(crate) proof_history: Vec<ZkProof>,
 }
-
 // Define the ChannelConfig struct
 
 #[derive(Debug, Clone)]

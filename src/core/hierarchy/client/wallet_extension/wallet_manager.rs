@@ -36,3 +36,62 @@ impl<StateManager> WalletManager<StateManager> {
                 self.create_channel(channel_id)?;
                 Ok(vec![])
             }
+            WalletOpCode::CloseChannel => {
+                // Decode parameters as necessary (e.g., channel_id)
+                let channel_id = decode_channel_id(&params)?;
+                self.close_channel(channel_id)?;
+                Ok(vec![])
+            }
+            WalletOpCode::GetChannel => {
+                // Decode parameters as necessary (e.g., channel_id)
+                let channel_id = decode_channel_id(&params)?;
+                self.get_channel(channel_id)?;
+                Ok(vec![])
+            }
+            WalletOpCode::UpdateWalletState => {
+                // Decode parameters as necessary (e.g., channel_id)
+                let new_state = decode_wallet_state(&params)?;
+                self.update_wallet_state(new_state)?;
+                Ok(vec![])
+            }
+            WalletOpCode::ValidateWalletState => {
+                // Decode parameters as necessary (e.g., channel_id)
+                let proof = decode_wallet_state_proof(&params)?;
+                self.validate_wallet_state(proof)?;
+                Ok(vec![])
+            }
+            WalletOpCode::CreateTransaction => {
+                // Decode parameters as necessary (e.g., channel_id)
+                let transaction = decode_transaction(&params)?;
+                self.create_transaction(transaction)?;
+                Ok(vec![])
+            }
+            WalletOpCode::GenerateWalletProof => {
+                // Decode parameters as necessary (e.g., channel_id)
+                let request = decode_proof_request(&params)?;
+                self.generate_wallet_proof(request)?;
+                Ok(vec![])
+            }
+            WalletOpCode::VerifyWalletProof => {
+                // Decode parameters as necessary (e.g., channel_id)
+                let request = decode_proof_request(&params)?;
+                self.verify_wallet_proof(request)?;
+                Ok(vec![])
+            }
+        }
+    }
+
+    fn create_channel(&self, channel_id: [u8; 32]) -> Result<(), SystemError> {
+        let channel = ChannelContract::new(channel_id);
+        self.channels
+            .insert(channel_id, Arc::new(RwLock::new(channel)));
+        self.total_locked_balance += channel.config.min_balance;
+        self.balance_tracker
+            .wallet_balances
+            .insert(channel_id, channel.config.min_balance);
+        self.balance_tracker
+            .state_transitions
+            .insert(channel_id, vec![]);
+        Ok(())
+    }
+}
