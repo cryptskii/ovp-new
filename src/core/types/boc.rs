@@ -108,6 +108,15 @@ impl BOC {
         self.cells.clear();
         self.roots.clear();
     }
+
+    pub fn serialize(&self) -> Result<Vec<u8>, crate::core::error::errors::Error> {
+        // Basic serialization - can be enhanced based on needs
+        let mut bytes = Vec::new();
+        for cell in &self.cells {
+            bytes.extend(&cell.data);
+        }
+        Ok(bytes)
+    }
 }
 
 #[cfg(test)]

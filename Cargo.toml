@@ -45,6 +45,7 @@ num-traits = "0.2.15"
 num-bigint = { version = "0.4", features = ["rand"] }
 lazy_static = "1.4.0"
 itertools = "0.13.0"
+serde_arrays = "0.1"
 serde-wasm-bindgen = "0.6.5"
 wasm-bindgen-test = "0.3.0"
 wasmcov = "0.2"

@@ -19,7 +19,7 @@ const D: usize = 2;
 type F = GoldilocksField;
 type C = PoseidonGoldilocksConfig;
 
-#[allow(dead_code)]
+#[wasm_bindgen]
 pub struct Plonky2System {
     circuit_config: CircuitConfig,
     state_transition_circuit: StateTransitionCircuitData,
