@@ -54,7 +54,7 @@ impl Balance {
     }
 
     fn verify_proof(&self, proof: &ZkProof) -> Option<bool> {
-        let verifier = ZkVerifier::new(proof.id);
+        let mut verifier = ZkVerifier::new(proof.id);
         verifier.verify(&proof.data)
     }
 }
@@ -92,12 +92,32 @@ impl ZkVerifier {
         }
     }
 
-    pub fn verify(&self, proof_data: &[u8]) -> Option<bool> {
-        // Implementation of zk-SNARK verification logic would go here
+    pub fn verify(&mut self, proof_data: &[u8]) -> Option<bool> {
+        // Basic verification steps:
+        // 1. Check if proof data is not empty
+        if proof_data.is_empty() {
+            return None;
+        }
+
+        // 2. Verify proof data length matches expected format
+        if proof_data.len() < 64 {
+            return None;
+        }
+
+        // 3. Compare proof data with verifier id
+        let matches_id = proof_data[0..32].eq(&self.id);
+        if !matches_id {
+            return Some(false);
+        }
+
+        // 4. Store proof data for future reference
+        self.data = proof_data.to_vec();
+
+        // 5. Return verification result
+        // In a real implementation, this would perform actual zk-SNARK verification
         Some(true)
     }
 }
-
 // Balance Types
 pub struct Balance {
     pub balance: u64,

@@ -21,7 +21,7 @@ impl TreeManager {
         transaction: &Transaction,
     ) -> Result<(), crate::core::error::Error> {
         // Validate transaction
-        if !transaction.validate() {
+        if !Operation::validate(transaction) {
             return Err(crate::core::error::Error::InvalidTransaction);
         }
 

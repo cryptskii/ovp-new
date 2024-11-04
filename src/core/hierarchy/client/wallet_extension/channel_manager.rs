@@ -1,7 +1,7 @@
 use crate::core::error::{Error, SystemError, SystemErrorType};
 use crate::core::hierarchy::client::channel::channel_contract::ChannelContract;
 use crate::core::types::ovp_ops::ChannelOpCode;
-use crate::core::zkps::plonky2::{Plonky2System, Plonky2SystemHandle};
+use crate::core::zkps::plonky2::Plonky2SystemHandle;
 use crate::core::zkps::proof::ZkProof;
 use anyhow::{anyhow, Result};
 use sha2::{Digest, Sha256};
