@@ -1,10 +1,10 @@
 // ./src/core/storage_node/replication/mod.rs
 
-use crate::core::replication::consistency::ReplicationConsistencyManager;
-use crate::core::replication::distribution::ReplicationDistributionManager;
-use crate::core::replication::verification::ReplicationVerificationManager;
+use crate::core::error::SystemErrorType;
+use crate::core::storage_node::replication::consistency::ReplicationConsistencyManager;
+use crate::core::storage_node::replication::distribution::ReplicationDistributionManager;
+use crate::core::storage_node::replication::verification::ReplicationVerificationManager;
 use crate::core::storage_node::storage_node::StorageNode;
-use crate::core::types::SystemErrorType;
 use std::sync::Arc;
 use std::time::Duration;
 use wasm_bindgen_futures::spawn_local;
@@ -19,7 +19,6 @@ pub struct ReplicationManager<RootTree, IntermediateTreeManager> {
     pub consistency_manager: ReplicationConsistencyManager,
     pub verification_manager: ReplicationVerificationManager<RootTree, IntermediateTreeManager>, // Add the required generics here
 }
-
 impl<RootTree, IntermediateTreeManager> ReplicationManager<RootTree, IntermediateTreeManager> {
     pub fn new(
         storage_node: Arc<StorageNode<RootTree, IntermediateTreeManager>>,
@@ -29,15 +28,18 @@ impl<RootTree, IntermediateTreeManager> ReplicationManager<RootTree, Intermediat
         response_interval: Duration,
     ) -> Self {
         let distribution_manager = ReplicationDistributionManager::new(
-            storage_node.clone(),
+            wasm_bindgen::JsValue::NULL,
             replication_threshold,
             replication_interval.as_secs() as u32,
         );
-        let consistency_manager = ReplicationConsistencyManager::new(
-            storage_node.clone(),
-            replication_threshold,
-            replication_interval,
-        );
+
+        let consistency_manager = ReplicationConsistencyManager {
+            storage_node: storage_node.clone(),
+            response_threshold,
+
+            response_interval: response_interval.as_secs() as u32,
+        };
+
         let verification_manager = ReplicationVerificationManager::new(
             storage_node.clone(),
             response_threshold,
@@ -51,18 +53,28 @@ impl<RootTree, IntermediateTreeManager> ReplicationManager<RootTree, Intermediat
             verification_manager,
         }
     }
+    pub async fn start_replication(self: Arc<Self>) -> Result<(), SystemErrorType>
+    where
+        RootTree: 'static,
+        IntermediateTreeManager: 'static,
+    {
+        let self_clone = self.clone();
+        spawn_local(async move {
+            let _ = self_clone
+                .distribution_manager
+                .start_replication_distribution();
+        });
 
-    pub async fn start_replication(&self) -> Result<(), SystemErrorType> {
-        let distribution_handle =
-            spawn_local(self.distribution_manager.start_replication_distribution());
-        let consistency_handle = spawn_local(self.consistency_manager.check_consistency());
-        let verification_handle = spawn_local(self.verification_manager.verify_replication());
+        let self_clone = self.clone();
+        spawn_local(async move {
+            let _ = self_clone.consistency_manager.check_consistency();
+        });
 
-        distribution_handle.await?;
-        consistency_handle.await?;
-        verification_handle.await?;
+        let self_clone = self.clone();
+        spawn_local(async move {
+            let _ = self_clone.verification_manager.verify_replication();
+        });
 
         Ok(())
     }
 }
-    

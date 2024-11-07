@@ -1,7 +1,8 @@
 // ./src/core/storage_node/replication/verification.rs
 
 use crate::core::storage_node::storage_node::StorageNode;
-use crate::core::types::SystemError;
+use crate::core::error::SystemError;
+use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -9,6 +10,7 @@ pub struct ReplicationVerificationManager<RootTree, IntermediateTreeManager> {
     storage_node: Arc<StorageNode<RootTree, IntermediateTreeManager>>,
     replication_threshold: u64,
     replication_interval: Duration,
+    _phantom: PhantomData<IntermediateTreeManager>,
 }
 
 impl<RootTree, IntermediateTreeManager>
@@ -24,6 +26,7 @@ impl<RootTree, IntermediateTreeManager>
             storage_node,
             replication_threshold,
             replication_interval,
+            _phantom: PhantomData,
         }
     }
 

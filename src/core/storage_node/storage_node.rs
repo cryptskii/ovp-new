@@ -1,8 +1,5 @@
-use crate::core::hierarchy::intermediate_tree_manager::IntermediateTreeManager;
 use crate::core::hierarchy::root::sparse_merkle_tree_r::SparseMerkleTreeR;
-use crate::core::hierarchy::sparse_merkle_tree_i::SparseMerkleTreeI;
-use crate::core::hierarchy::ZkProof;
-use crate::core::types::ovp_types::*;
+
 use anyhow::Result;
 use futures::lock::Mutex;
 use sha2::{Digest, Sha256};
@@ -10,9 +7,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 // Custom types for compatibility with your application structure
-type RootTree = SparseMerkleTreeR;
-type IntermediateTree = SparseMerkleTreeI;
 
+type RootTree = SparseMerkleTreeR;
 impl ZkProof {
     pub fn verify_parameters(&self) -> bool {
         // Implement verification logic

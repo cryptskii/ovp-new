@@ -3,9 +3,7 @@ use crate::core::error::SystemError;
 use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
 use crate::core::types::boc::BOC;
 use crate::core::types::ovp_ops::WalletOpCode;
-use crate::core::types::ovp_ops::WalletOpCode;
-use crate::core::types::ProofRequest;
-use crate::core::types::ProofStatement; // Added for proof verification
+use crate::core:: // Added for proof verification
 use crate::core::zkps::plonky2::Plonky2SystemHandle;
 use crate::core::zkps::proof::ZkProof;
 use js_sys::{Date, Promise, Uint8Array};
