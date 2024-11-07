@@ -69,12 +69,25 @@ impl IntermediateContract {
         let new_root = self.calculate_intermediate_root()?;
         let zkp = self.generate_root_transition_proof(&new_root)?;
         let boc = self.generate_root_boc(&new_root, &zkp)?;
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_secs();
+        let zk_proof = Vec::new(); // Placeholder, replace with actual ZK proof
+        let public_inputs = Vec::new(); // Placeholder, replace with actual public inputs
+        let merkle_root = new_root.clone();
 
-        self.submit_to_root_contract(boc, zkp.clone()).await?;
+        self.submit_to_root_contract(
+            boc,
+            zkp.clone(),
+            timestamp,
+            zk_proof,
+            public_inputs,
+            merkle_root,
+        )
+        .await?;
         self.update_storage_nodes_root_state(&new_root, &zkp)?;
 
         Ok(())
     }
+
     fn calculate_intermediate_root(&self) -> Result<Vec<u8>, anyhow::Error> {
         let mut tree = SparseMerkleTreeI::new();
 
@@ -125,7 +138,8 @@ impl IntermediateContract {
             merkle_root,
         };
 
-        self.destination_contract.submit_state(submission).await?;
+        self.destination_contract.submit_root(submission).await?;
+        self.calculate_intermediate_root()?;
         Ok(())
     }
     fn current_epoch(&self) -> u64 {
@@ -141,6 +155,7 @@ impl IntermediateContract {
         task::sleep(Duration::from_secs(5)).await;
         Ok(())
     }
+
     fn get_available_storage_nodes<R, I>() -> Result<Vec<StorageNode<R, I>>, anyhow::Error> {
         let mut nodes = Vec::new();
         let available_nodes = StorageNode::<R, I>::get_all_nodes()?;

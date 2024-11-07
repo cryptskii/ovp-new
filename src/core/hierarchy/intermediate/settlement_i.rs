@@ -116,19 +116,24 @@ impl<RootTree> SettlementIntermediate<RootTree> {
             .settlement_proofs
             .get(&channel_id)
             .ok_or(SystemError::ProofNotFound)?;
-
         self.root_contract
-            .as_ref()
             .submit_settlement(channel_id, settlement_state.clone(), proof.clone())
-            .await?;
+            .await
+            .map_err(|e| SystemError::Generic(e.to_string()))?;
+
+        // Update settlement status to Completed
+        if let Some(settlement) = self.pending_settlements.get_mut(&channel_id) {
+            settlement.status = SettlementStatus::Completed;
+        }
+
+        // Clean up proofs after successful submission
+        self.settlement_proofs.remove(&channel_id);
 
         Ok(())
     }
-
     fn verify_state_consistency(&self, stored_state: &BOC, final_state: &BOC) -> bool {
         stored_state.merkle_root == final_state.merkle_root
     }
-
     fn extract_final_balances(&self, state: &BOC) -> Result<HashMap<[u8; 32], u64>, SystemError> {
         let mut balances = HashMap::new();
         let state_data = state.deserialize_state()?;
