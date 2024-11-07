@@ -186,7 +186,7 @@ impl fmt::Debug for WalletExtension {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("WalletExtension")
             .field("wallet_id", &self.wallet_id)
-            .field("channels", &self.channels)
+            .field("channels", &"<channels>")
             .field("total_locked_balance", &self.total_locked_balance)
             .field("rebalance_config", &self.rebalance_config)
             .field("proof_system", &self.proof_system)
