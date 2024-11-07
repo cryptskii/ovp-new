@@ -94,6 +94,19 @@ pub fn root_cell_hash(data: &[u8]) -> [u8; 32] {
     hash
 }
 
+// get_references function
+pub fn get_refs(cells: &[Cell]) -> Vec<usize> {
+    let mut references = Vec::new();
+    for (index, cell) in cells.iter().enumerate() {
+        for reference in cell.references.iter() {
+            if !references.contains(reference) {
+                references.push(*reference);
+            }
+        }
+    }
+    references
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CellType {
     Ordinary,

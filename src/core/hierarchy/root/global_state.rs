@@ -1,26 +1,8 @@
-// ./src/core/hierarchy/root/global_state.rs
-
-// This file contains the GlobalState struct, which represents the global state of the root contract.
-// It contains the root hash of the global Merkle tree, the total balance, and the epoch number BOC. Wrapped in a ZkProof, it is used to verify the state of the root contract.
-use crate::core::error::errors::{SystemError, SystemErrorType};
-use crate::core::hierarchy::account::AccountState;
-use crate::core::hierarchy::merkle_proof::MerkleProof;
-use crate::core::hierarchy::root::RootContract;
-use crate::core::hierarchy::transaction::Transaction;
-use crate::core::hierarchy::tree::SparseMerkleTreeR;
-use crate::core::utils::{Address, Hash};
-use crate::core::zkps::plonky2::{
-    field::goldilocks_field::GoldilocksField, hash::hash_types::PoseidonHash,
-};
-use crate::core::zkps::proof::ZkProof;
-use crate::core::zkps::state_transition::StateTransition;
-use crate::core::zkps::transaction::ZkTransaction;
-use crate::core::zkps::zk_token_proof::ZkTokenProof;
-
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Clone)]
-pub struct GlobalState<StateTransitionRecord> {
+#[derive(Clone, Debug)]
+pub struct GlobalState {
     pub root_hash: [u8; 32],
     pub epoch_number: u64,
     pub accounts: HashMap<String, AccountState>,
@@ -31,12 +13,13 @@ pub struct GlobalState<StateTransitionRecord> {
     global_merkle_tree: Vec<[u8; 32]>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct AccountState {
     pub balance: u64,
     pub nonce: u64,
 }
 
+#[derive(Clone, Debug)]
 pub struct StateTransitionRecord {
     pub epoch_id: u64,
     pub root_hash: [u8; 32],
@@ -44,7 +27,7 @@ pub struct StateTransitionRecord {
     pub timestamp: u64,
 }
 
-impl<StateTransitionRecord> GlobalState<StateTransitionRecord> {
+impl GlobalState {
     /// Creates a new global state.
     pub fn new(root_hash: [u8; 32], epoch_number: u64) -> Self {
         Self {
@@ -73,33 +56,63 @@ impl<StateTransitionRecord> GlobalState<StateTransitionRecord> {
 
     /// Updates the intermediate contract state and recalculates global Merkle root
     pub fn update_intermediate_state(&mut self, seqno: u64, intermediate_root: [u8; 32]) {
-        // Update intermediate root in mapping
         self.intermediate_roots.insert(seqno, intermediate_root);
-
-        // Update global Merkle tree (O(log m) operation)
         self.update_global_merkle_tree(seqno, intermediate_root);
     }
 
     /// Updates the global Merkle tree after an intermediate contract update
     fn update_global_merkle_tree(&mut self, seqno: u64, new_root: [u8; 32]) {
-        // Implementation would update the Merkle tree path from leaf to root
-        // This is a O(log m) operation where m is number of intermediate contracts
+        let leaf_index = self.get_leaf_index(seqno);
 
-        // Placeholder for actual Merkle tree update logic
-        if let Some(index) = self.get_leaf_index(seqno) {
-            self.global_merkle_tree[index] = new_root;
-            self.recompute_global_root();
+        // Extend tree if needed
+        if leaf_index >= self.global_merkle_tree.len() {
+            self.global_merkle_tree.resize(leaf_index + 1, [0u8; 32]);
         }
+
+        self.global_merkle_tree[leaf_index] = new_root;
+        self.recompute_global_root();
     }
 
-    fn get_leaf_index(&self, seqno: u64) -> Option<usize> {
-        // Implementation to map SEQNO to Merkle tree leaf index
-        Some(seqno as usize)
+    fn get_leaf_index(&self, seqno: u64) -> usize {
+        // Simple mapping - could be made more sophisticated
+        seqno as usize
     }
 
     fn recompute_global_root(&mut self) {
-        // Implementation to recompute global Merkle root
-        // This is a O(log m) operation
+        let mut current_level = self.global_merkle_tree.clone();
+
+        while current_level.len() > 1 {
+            let mut next_level = Vec::new();
+
+            for pair in current_level.chunks(2) {
+                match pair {
+                    [left, right] => {
+                        next_level.push(self.hash_pair(left, right));
+                    }
+                    [single] => {
+                        next_level.push(*single);
+                    }
+                    _ => unreachable!(),
+                }
+            }
+
+            current_level = next_level;
+        }
+
+        if let Some(new_root) = current_level.first() {
+            self.root_hash = *new_root;
+        }
+    }
+
+    fn hash_pair(&self, left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        hasher.update(left);
+        hasher.update(right);
+        let result = hasher.finalize();
+        let mut hash = [0u8; 32];
+        hash.copy_from_slice(&result);
+        hash
     }
 
     /// Adds a state transition record.
@@ -121,5 +134,50 @@ impl StateTransitionRecord {
             affected_wallet_ids: wallet_ids,
             timestamp,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_global_state_creation() {
+        let root_hash = [0u8; 32];
+        let state = GlobalState::new(root_hash, 0);
+        assert_eq!(state.root_hash, root_hash);
+        assert_eq!(state.epoch_number, 0);
+        assert_eq!(state.total_balance, 0);
+    }
+
+    #[test]
+    fn test_update_root_hash() {
+        let mut state = GlobalState::new([0u8; 32], 0);
+        let new_root = [1u8; 32];
+        state.update_root_hash(new_root);
+        assert_eq!(state.root_hash, new_root);
+    }
+
+    #[test]
+    fn test_state_transition_record() {
+        let record = StateTransitionRecord::new(1, [0u8; 32], vec![[1u8; 32]], 12345);
+        assert_eq!(record.epoch_id, 1);
+        assert_eq!(record.timestamp, 12345);
+        assert_eq!(record.affected_wallet_ids.len(), 1);
+    }
+
+    #[test]
+    fn test_balance_update() {
+        let mut state = GlobalState::new([0u8; 32], 0);
+        state.update([1u8; 32], 100, 1);
+        assert_eq!(state.total_balance, 100);
+
+        // Test negative balance update
+        state.update([2u8; 32], -50, 2);
+        assert_eq!(state.total_balance, 50);
+
+        // Test that balance cannot go negative
+        state.update([3u8; 32], -100, 3);
+        assert_eq!(state.total_balance, 0);
     }
 }
