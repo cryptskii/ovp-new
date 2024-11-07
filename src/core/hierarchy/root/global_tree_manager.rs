@@ -1,6 +1,6 @@
 // src/core/global/global_tree_manager.rs
-use crate::core::types::ovp_types::*;
-use crate::core::zkp::zkp::ZkProof;
+
+use crate::core::zkps::proof::ZkProof;
 
 pub struct GlobalTreeManager;
 
