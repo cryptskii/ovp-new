@@ -15,6 +15,20 @@ pub struct RootContract {
     last_submission: u64,
     // Whether to verify settlement state
     verify_settlement_state: bool,
+    // Whether to verify intermediate contract state
+    verify_intermediate_state: bool,
+    // Whether to verify channel state
+    verify_channel_state: bool,
+    // Whether to verify transaction state
+    verify_transaction_state: bool,
+    // Whether to verify storage state
+    verify_storage_state: bool,
+    // Whether to verify global state
+    verify_global_state: bool,
+    // Whether to verify root state
+    verify_root_state: bool,
+    // Whether to submit settlement state
+    submit_settlement: bool,
 }
 
 impl RootContract {
@@ -26,6 +40,13 @@ impl RootContract {
             epoch_duration,
             last_submission: 0,
             verify_settlement_state: true,
+            verify_intermediate_state: false,
+            verify_channel_state: false,
+            verify_transaction_state: false,
+            verify_storage_state: false,
+            verify_global_state: false,
+            verify_root_state: false,
+            submit_settlement: true,
         }
     }
 
@@ -62,6 +83,8 @@ impl RootContract {
 
         self.epoch += 1;
         self.last_submission = now;
+        self.verify_settlement_state = true;
+        self.submit_settlement = true;
 
         // Verify the global root
         if !self.verify_global_state(root, proof) {
@@ -102,6 +125,7 @@ impl RootContract {
         builder.append_u64(self.epoch_duration)?;
         builder.append_u64(self.last_submission)?;
         builder.append_u8(self.verify_settlement_state as u8)?;
+        builder.append_u8(self.submit_settlement as u8)?;
 
         // Serialize global tree
         let tree_cell = self.global_tree.serialize()?;
@@ -125,7 +149,9 @@ impl RootContract {
         let epoch = slice.get_u64()?;
         let epoch_duration = slice.get_u64()?;
         let last_submission = slice.get_u64()?;
-        let verify_settlement_state = slice.get_u8()?;
+
+        let verify_settlement_state = slice.get_u8()? != 0;
+        let submit_settlement = slice.get_u8()? != 0;
 
         // Deserialize global tree
         let tree_cell = slice.reference(0)?;
@@ -154,7 +180,15 @@ impl RootContract {
             epoch,
             epoch_duration,
             last_submission,
-            verify_settlement_state: false,
+
+            verify_settlement_state,
+            submit_settlement,
+            verify_intermediate_state: false,
+            verify_channel_state: false,
+            verify_transaction_state: false,
+            verify_storage_state: false,
+            verify_global_state: false,
+            verify_root_state: false,
         })
     }
 }
@@ -167,6 +201,7 @@ pub enum Error {
     SerializationError(String),
     DeserializationError(String),
     InvalidSettlementState,
+    SubmitSettlement,
 }
 
 // Helper types
