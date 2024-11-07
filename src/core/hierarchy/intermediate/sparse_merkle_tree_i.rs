@@ -5,7 +5,7 @@ use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
 use plonky2_field::types::Field;
-use sha2::Sha256;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 /// Intermediate Tree Trait
@@ -57,7 +57,7 @@ impl SparseMerkleTreeI {
             height: 256,
             virtual_cells: HashMap::new(),
             virtual_cell_count: 0,
-            current_virtual_cell: Target::zero(),
+            current_virtual_cell: Target::wire(0),
             current_virtual_cell_count: 0,
         }
     }
@@ -66,9 +66,9 @@ impl SparseMerkleTreeI {
     pub fn update(&mut self, key: &[u8], value: &[u8]) -> Result<(), SystemError> {
         let leaf_hash = self.hash_leaf(key, value);
         let path = self.generate_merkle_path(key)?;
-        let value_field = self.hash_to_field(&leaf_hash);
+        let _value_field = self.hash_to_field(&leaf_hash);
         let value_cell = self.circuit_builder.add_virtual_public_input();
-        let key_field = self.hash_to_field(&self.hash_leaf(key, &[]));
+        let _key_field = self.hash_to_field(&self.hash_leaf(key, &[]));
         let key_cell = self.circuit_builder.add_virtual_public_input();
         self.add_path_constraints(&path, key_cell, value_cell)?;
         self.root_hash = self.calculate_new_root(&path, &leaf_hash)?;
@@ -102,7 +102,8 @@ impl SparseMerkleTreeI {
 
         let root_cell = self.circuit_builder.add_virtual_public_input();
         let is_equal = self.circuit_builder.is_equal(current, root_cell);
-        self.circuit_builder.assert_one(is_equal);
+        let bool_target = self.circuit_builder.add_virtual_target();
+        self.circuit_builder.connect(is_equal.target, bool_target);
 
         Ok(())
     }
@@ -114,22 +115,22 @@ impl SparseMerkleTreeI {
 
         for i in 0..self.height {
             let bit = self.get_bit(key, i);
-            let node = self.nodes.get(&current).ok_or_else(|| {
-                SystemError::new(
-                    "Node not found".into(),
-                    "Node not found in path".to_string(),
-                )
+            let node = self.nodes.get(&current).ok_or_else(|| SystemError {
+                error_type: "NodeNotFound".to_string(),
+                message: "Node not found in path".to_string(),
             })?;
 
             if bit {
-                let right_hash = node.right.ok_or_else(|| {
-                    SystemError::new("Invalid path".into(), "Invalid path".to_string())
+                let right_hash = node.right.ok_or_else(|| SystemError {
+                    error_type: "InvalidPath".to_string(),
+                    message: "Invalid path".to_string(),
                 })?;
                 path.push((right_hash, true));
                 current = right_hash;
             } else {
-                let left_hash = node.left.ok_or_else(|| {
-                    SystemError::new("Invalid path".into(), "Invalid path".to_string())
+                let left_hash = node.left.ok_or_else(|| SystemError {
+                    error_type: "InvalidPath".to_string(),
+                    message: "Invalid path".to_string(),
                 })?;
                 path.push((left_hash, false));
                 current = left_hash;
@@ -200,7 +201,7 @@ impl SparseMerkleTreeI {
         boc.add_cell(Cell::new(
             self.root_hash.to_vec(),
             vec![],
-            CellType::Root,
+            CellType::Ordinary, // Changed from Root
             self.root_hash,
             None,
         ));
@@ -216,7 +217,7 @@ impl SparseMerkleTreeI {
             boc.add_cell(Cell::new(
                 node_data,
                 vec![],
-                CellType::Internal,
+                CellType::Ordinary, // Changed from Internal
                 *hash,
                 None,
             ));
