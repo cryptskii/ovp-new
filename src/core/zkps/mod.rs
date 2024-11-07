@@ -7,4 +7,3 @@ pub mod plonky2;
 pub mod proof;
 pub mod zkp;
 pub mod zkp_interface;
-pub mod zkp_transaction;
