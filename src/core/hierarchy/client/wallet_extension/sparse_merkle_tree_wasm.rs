@@ -229,7 +229,7 @@ fn hash_key(key: &[u8]) -> Vec<u8> {
     hasher.finalize().to_vec()
 }
 
-fn hash_value(value: &[u8]) -> Vec<u8> {
+pub(crate) fn hash_value(value: &[u8]) -> Vec<u8> {
     let mut hasher = Sha256::new();
     hasher.update(value);
     hasher.finalize().to_vec()

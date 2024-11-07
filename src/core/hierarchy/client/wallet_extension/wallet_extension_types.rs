@@ -273,7 +273,6 @@ impl WalletBalanceTracker {
     ) -> Result<(), Error> {
         self.wallet_balances.insert(channel_id, new_balance);
 
-        let mut hasher = sha2::Sha256::new();
         if let Some(root_cell) = boc.get_root_cell() {
             hasher.update(&root_cell.data);
             let mut root_hash = [0u8; 32];
@@ -346,8 +345,9 @@ impl WalletBalanceTracker {
             .ok_or(Error::StakeError("State not found".to_string()))?;
 
         // Deserialize state BOC into a Cell
-        let state_cell = BOC::deserialize(&state_boc)
-            .map_err(|_| Error::StakeError("Failed to deserialize state BOC".to_string()))?
+        let binding = BOC::deserialize(&state_boc)
+            .map_err(|_| Error::StakeError("Failed to deserialize state BOC".to_string()))?;
+        let state_cell = binding
             .get_root_cell()
             .ok_or(Error::StakeError("Invalid BOC: no root cell".to_string()))?;
 
