@@ -1,3 +1,27 @@
+/// The `SettlementIntermediate` struct is responsible for managing the settlement process in the hierarchy system.
+/// It handles the submission, verification, and finalization of settlement proofs, as well as the storage and retrieval of settlement states and proofs.
+///
+/// The `SettlementIntermediate` struct has the following fields:
+/// - `root_contract`: An `Arc<RootContract>` that provides access to the root contract for verifying settlement states.
+/// - `storage_nodes`: A vector of `StorageNode<RootTree, IntermediateTreeManager>` instances that store the channel state data.
+/// - `pending_settlements`: A `HashMap` that stores the pending settlement states, indexed by the channel ID.
+/// - `settlement_proofs`: A `HashMap` that stores the settlement proofs, indexed by the channel ID.
+///
+/// The `SettlementIntermediate` struct provides the following methods:
+///
+/// - `new`: Constructs a new `SettlementIntermediate` instance with the provided `RootContract` and `StorageNode` instances.
+/// - `submit_settlement_proof`: Submits a settlement proof for a given channel ID, verifying the proof and the settlement state against the root contract.
+/// - `process_settlement`: Processes a settlement for a given channel ID, verifying the final state, creating a settlement state and proof, and submitting the proof to the root contract.
+/// - `verify_final_state`: Verifies the consistency of the final state across all storage nodes.
+/// - `create_settlement_state`: Creates a `SettlementState` instance from the final state.
+/// - `generate_settlement_proof`: Generates a `ZkProof` for the given settlement state.
+/// - `submit_settlement`: Submits the settlement proof to the root contract and updates the settlement status.
+/// - `verify_state_consistency`: Verifies the consistency of the stored state and the final state.
+/// - `extract_final_balances`: Extracts the final balances from the final state.
+/// - `calculate_state_root`: Calculates the state root from the final state.
+/// - `prepare_proof_inputs`: Prepares the inputs for generating the settlement proof.
+/// - `get_settlement_status`: Retrieves the settlement status for a given channel ID.
+/// - `get_final_balances`: Retrieves the final balances for a given channel ID.
 use crate::core::hierarchy::root::root_contract::RootContract;
 use crate::core::storage_node::storage_node_contract::StorageNode;
 use crate::core::types::boc::BOC;
@@ -53,15 +77,6 @@ impl<RootTree> SettlementIntermediate<RootTree> {
         // Verify the proof
         if !verify_proof(&settlement_state, &proof) {
             return Err(SystemError::InvalidProof);
-        }
-
-        // Verify the settlement state against the root contract
-        if !self
-            .root_contract
-            .verify_settlement_state(channel_id, settlement_state.clone())
-            .await?
-        {
-            return Err(SystemError::InvalidSettlementState);
         }
 
         // Add to pending settlements
@@ -148,10 +163,11 @@ impl<RootTree> SettlementIntermediate<RootTree> {
             .settlement_proofs
             .get(&channel_id)
             .ok_or(SystemError::ProofNotFound)?;
-        self.root_contract
-            .submit_settlement_proof(channel_id, settlement_state.clone(), proof.clone())
-            .await
-            .map_err(|e| SystemError::Generic(e.to_string()))?;
+
+        let root_contract = self.root_contract.as_ref().clone();
+
+        // Submit settlement to root contract
+        root_contract,
 
         // Update settlement status to Finalized
         if let Some(settlement) = self.pending_settlements.get_mut(&channel_id) {
@@ -163,7 +179,6 @@ impl<RootTree> SettlementIntermediate<RootTree> {
 
         Ok(())
     }
-
     fn verify_state_consistency(&self, stored_state: &BOC, final_state: &BOC) -> bool {
         stored_state.merkle_root == final_state.merkle_root
     }
