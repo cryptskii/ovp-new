@@ -4,6 +4,9 @@
 // This module is the entry point for accessing the storage nodes' storage and retrieval capabilities.
 // It provides methods for storing and retrieving data, as well as verifying the proofs provided by the storage nodes.
 use crate::core::error::errors::{SystemError, SystemErrorType};
+use crate::core::hierarchy::intermediate::sparse_merkle_tree_i::SparseMerkleTreeI;
+use crate::core::hierarchy::root::root_contract::RootContract;
+use crate::core::hierarchy::root::sparse_merkle_tree_r::SparseMerkleTreeR;
 
 use crate::core::storage_node::storage_node_contract::StorageNode;
 use crate::core::types::boc::BOC;
@@ -29,7 +32,7 @@ impl<RootTree, IntermediateTreeManager>
     pub async fn store_data(&self, boc: BOC, proof: ZkProof) -> Result<(), SystemError> {
         self.storage_node
             .as_ref()
-            .store_update(&boc, &proof)
+            .store_boc(&boc, &proof)
             .await
             .map_err(|e| SystemError::new(SystemErrorType::InvalidAmount, e.to_string()))?;
         Ok(())

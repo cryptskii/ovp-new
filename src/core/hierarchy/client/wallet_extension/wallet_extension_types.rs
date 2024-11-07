@@ -3,12 +3,10 @@ use crate::core::hierarchy::client::channel::channel_contract::ChannelContract;
 use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
 use crate::core::hierarchy::client::wallet_extension::wallet_extension_contract::ByteArray32;
 use crate::core::storage_node::storage_node_contract::StorageNode;
-use crate::core::types::boc::{Cell, CellType, RootCell, Script, ScriptHashType, BOC, H256};
+use crate::core::types::boc::BOC;
 use crate::core::types::WalletExtensionStateChangeOp;
 use crate::core::zkps::plonky2::Plonky2SystemHandle;
 use crate::core::zkps::proof::ZkProof;
-use aes_gcm::aead::{Aead, Payload};
-use aes_gcm::KeyInit;
 
 use ed25519_dalek::Signature;
 use serde::{Deserialize, Serialize};
@@ -183,7 +181,7 @@ pub struct WalletExtension {
     pub state_tree: SparseMerkleTreeWasm,
     pub root_hash: [u8; 32],
     pub balance: u64,
-    pub encrypted_states: Arc<StorageNode<ByteArray32, Vec<u8>>>,
+    pub encrypted_states: HashMap<[u8; 32], Vec<u8>>,
 }
 impl fmt::Debug for WalletExtension {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -1,9 +1,10 @@
 use crate::core::error::errors::SystemErrorType;
 use crate::core::error::SystemError;
-
-use crate::core::epidemic::EpidemicProtocol;
-use crate::core::hierarchy::intermediate::IntermediateTreeManager;
+use crate::core::hierarchy::client::channel::channel_contract::Channel;
 use crate::core::storage_node::battery::BatteryChargingSystem;
+use crate::core::storage_node::epidemic::overlap::StorageOverlapManager;
+use crate::core::storage_node::epidemic::propagation::BatteryPropagation;
+use crate::core::storage_node::epidemic::sync::SynchronizationManager;
 
 use crate::core::types::boc::BOC;
 use crate::core::zkps::proof::ZkProof;
@@ -20,6 +21,25 @@ pub struct StorageNodeConfig {
     pub sync_config: SyncConfig,
     pub epidemic_protocol_config: EpidemicProtocolConfig,
     pub network_config: NetworkConfig,
+}
+
+// store_boc
+pub fn store_boc(boc: &BOC, proof: &ZkProof) -> Result<(), SystemError> {
+    let mut storage_node = StorageNode::new(
+        [0u8; 32],
+        100,
+        StorageNodeConfig {
+            battery_config: BatteryConfig::default(),
+            sync_config: SyncConfig::default(),
+            epidemic_protocol_config: EpidemicProtocolConfig::default(),
+            network_config: NetworkConfig::default(),
+        },
+        RootTree::default(),
+        IntermediateTree::default(),
+        IntermediateTreeManager::default(),
+        vec![],
+    );
+    storage_node.store_boc(boc, proof).await
 }
 
 #[derive(Clone)]
