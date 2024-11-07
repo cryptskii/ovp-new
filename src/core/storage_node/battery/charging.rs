@@ -4,19 +4,42 @@ use crate::core::{
 use std::sync::atomic::{AtomicU64, Ordering};
 use web_sys::window;
 
+#[derive(Clone, Default)]
+pub struct BatteryConfig {
+    pub initial_charge: u64,
+    pub max_charge: u64,
+    pub min_capacity: u64,
+    pub cooldown_period: u64,
+    pub usage_rate: u64,
+    pub recharge_rate: u64,
+    pub max_recharge_attempts: u64,
+    pub recharge_wait_time: u64,
+}
+
 pub struct BatteryChargingSystem {
     pub battery_level: AtomicU64,
-    config: StorageNodeConfig,
+    config: BatteryConfig,
     last_charge_time: AtomicU64,
     pub reward_multiplier: AtomicU64,
     pub stake_amount: AtomicU64,
 }
 
 impl BatteryChargingSystem {
-    pub fn new(config: StorageNodeConfig, stake_amount: u64) -> Self {
+    pub fn new(stake_amount: u64) -> Self {
         let now = window().unwrap().performance().unwrap().now() as u64;
+        let config = BatteryConfig {
+            initial_charge: 100,
+            max_charge: 100,
+            min_capacity: 10,
+            cooldown_period: 1000,
+            usage_rate: 1,
+            recharge_rate: 1,
+            max_recharge_attempts: 10,
+            recharge_wait_time: 1000,
+        };
+
         Self {
-            battery_level: AtomicU64::new(config.battery_config.max_capacity),
+            battery_level: AtomicU64::new(config.max_charge),
             config,
             last_charge_time: AtomicU64::new(now),
             reward_multiplier: AtomicU64::new(100),
@@ -26,16 +49,16 @@ impl BatteryChargingSystem {
 
     pub async fn charge_for_processing(&self) -> Result<(), SystemErrorType> {
         let current_level = self.battery_level.load(Ordering::Acquire);
-        if current_level < self.config.battery_config.min_capacity {
+        if current_level < self.config.min_capacity {
             return Err(SystemErrorType::InsufficientBalance);
         }
         let now = window().unwrap().performance().unwrap().now() as u64;
         let last_charge = self.last_charge_time.load(Ordering::Acquire);
-        if now - last_charge < self.config.battery_config.cooldown_period {
+        if now - last_charge < self.config.cooldown_period {
             return Err(SystemErrorType::SpendingLimitExceeded);
         }
         self.battery_level
-            .fetch_sub(self.config.battery_config.usage_rate, Ordering::Release);
+            .fetch_sub(self.config.usage_rate, Ordering::Release);
         self.update_reward_multiplier();
         Ok(())
     }
@@ -44,19 +67,19 @@ impl BatteryChargingSystem {
         let now = window().unwrap().performance().unwrap().now() as u64;
 
         let last_charge = self.last_charge_time.load(Ordering::Acquire);
-        if now - last_charge < self.config.battery_config.cooldown_period {
+        if now - last_charge < self.config.cooldown_period {
             return Err(SystemErrorType::SpendingLimitExceeded);
         }
 
         let current_level = self.battery_level.load(Ordering::Acquire);
 
-        if current_level >= self.config.battery_config.max_capacity {
+        if current_level >= self.config.max_charge {
             return Ok(());
         }
 
-        let charge_rate = self.config.battery_config.recharge_rate * synchronized_nodes;
+        let charge_rate = self.config.recharge_rate * synchronized_nodes;
         let new_level = current_level.saturating_add(charge_rate);
-        let capped_level = new_level.min(self.config.battery_config.max_capacity);
+        let capped_level = new_level.min(self.config.max_charge);
 
         self.battery_level.store(capped_level, Ordering::Release);
         self.last_charge_time.store(now, Ordering::Release);
@@ -78,14 +101,14 @@ impl BatteryChargingSystem {
 
     pub fn get_charge_percentage(&self) -> f64 {
         let current_level = self.battery_level.load(Ordering::Relaxed);
-        (current_level as f64 / self.config.battery_config.max_capacity as f64) * 100.0
+        (current_level as f64 / self.config.max_charge as f64) * 100.0
     }
 
     pub async fn wait_for_sufficient_charge(&self) -> Result<(), SystemErrorType> {
         let mut attempts = 0;
 
-        while self.battery_level.load(Ordering::Acquire) < self.config.battery_config.min_capacity {
-            if attempts >= self.config.battery_config.max_recharge_attempts {
+        while self.battery_level.load(Ordering::Acquire) < self.config.min_capacity {
+            if attempts >= self.config.max_recharge_attempts {
                 return Err(SystemErrorType::SpendingLimitExceeded);
             }
             if self.battery_level.load(Ordering::Acquire) == 0 {
@@ -96,7 +119,7 @@ impl BatteryChargingSystem {
                     .unwrap()
                     .set_timeout_with_callback_and_timeout_and_arguments_0(
                         &resolve,
-                        self.config.battery_config.recharge_wait_time as i32,
+                        self.config.recharge_wait_time as i32,
                     )
                     .unwrap();
             });
