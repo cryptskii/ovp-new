@@ -30,6 +30,74 @@ impl Clone for PlonkySystemHandleWrapper {
     }
 }
 
+// Type definitions and implementations
+#[derive(Serialize, Deserialize, Clone)]
+pub struct CreateChannelParams {
+    pub counterparty: ByteArray32,
+    pub initial_balance: u64,
+    pub config: ChannelConfig,
+    pub spending_limit: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct ChannelUpdate {
+    pub new_state: PrivateChannelState,
+    pub balance: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct WalletStateUpdate {
+    pub old_balance: u64,
+    pub old_nonce: u64,
+    pub new_balance: u64,
+    pub new_nonce: u64,
+    pub transfer_amount: u64,
+    pub merkle_root: [u8; 32],
+    // Add other necessary fields
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct TransactionRequest {
+    pub channel_id: ByteArray32,
+    pub recipient: ByteArray32,
+    pub amount: u64,
+    pub fee: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct Transaction {
+    pub id: [u8; 32],
+    pub channel_id: [u8; 32],
+    pub sender: [u8; 32],
+    pub recipient: [u8; 32],
+    pub amount: u64,
+    pub nonce: u64,
+    pub sequence_number: u64,
+    pub timestamp: u64,
+    pub status: TransactionStatus,
+    pub signature: Signature,
+    pub zk_proof: Vec<u8>,
+    pub merkle_proof: Vec<u8>,
+    pub previous_state: Vec<u8>,
+    pub new_state: Vec<u8>,
+    pub fee: u64,
+}
+
+#[derive(Serialize, Deserialize, Clone, PartialEq)]
+pub enum TransactionStatus {
+    Pending,
+    Confirmed,
+    Failed,
+}
+
+impl Transaction {
+    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
+        bincode::serialize(self).map_err(|e| {
+            Error::SerializationError(format!("Failed to serialize transaction: {:?}", e))
+        })
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Transaction {
     pub id: [u8; 32],
@@ -98,8 +166,7 @@ pub struct WalletExtensionStateChange {
     pub wallet_id: [u8; 32],
     pub state: WalletExtensionState,
 }
-#[derive(Debug, Clone)]
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Debug, Clone, Serialize, Deserialize)]
 pub struct Channel {
     pub channel_id: [u8; 32],
     pub wallet_id: [u8; 32],
