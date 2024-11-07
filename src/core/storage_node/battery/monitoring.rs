@@ -1,18 +1,31 @@
-// ./src/core/storage_node/battery/monitoring.rs
+use crate::core::error::errors::SystemError;
 use crate::core::storage_node::battery::charging::BatteryChargingSystem;
 use crate::core::storage_node::storage_node_contract::StorageNode;
-use crate::core::types::ovp_types::*;
+use log;
 use std::sync::Arc;
 use std::sync::RwLock;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+pub trait BatteryInterface {
+    fn get_min_battery(&self) -> u64;
+    fn get_peers(&self) -> Vec<[u8; 32]>;
+    fn send_low_battery_alert(&self, peer_id: [u8; 32]) -> Result<(), SystemError>;
+    fn send_suspension_notice(&self) -> Result<(), SystemError>;
+    fn get_suspension_period(&self) -> Duration;
+    fn send_resume_notice(&self) -> Result<(), SystemError>;
+}
 
 pub struct BatteryMonitor<RootTree, IntermediateTreeManager> {
     battery_system: Arc<RwLock<BatteryChargingSystem>>,
     storage_node: Arc<StorageNode<RootTree, IntermediateTreeManager>>,
     monitoring_interval: Duration,
+    _phantom: std::marker::PhantomData<IntermediateTreeManager>,
 }
 
-impl<RootTree, IntermediateTreeManager> BatteryMonitor<RootTree, IntermediateTreeManager> {
+impl<RootTree, IntermediateTreeManager> BatteryMonitor<RootTree, IntermediateTreeManager>
+where
+    StorageNode<RootTree, IntermediateTreeManager>: BatteryInterface,
+{
     pub fn new(
         battery_system: Arc<RwLock<BatteryChargingSystem>>,
         storage_node: Arc<StorageNode<RootTree, IntermediateTreeManager>>,
@@ -22,6 +35,7 @@ impl<RootTree, IntermediateTreeManager> BatteryMonitor<RootTree, IntermediateTre
             battery_system,
             storage_node,
             monitoring_interval,
+            _phantom: std::marker::PhantomData,
         }
     }
 
@@ -51,18 +65,15 @@ impl<RootTree, IntermediateTreeManager> BatteryMonitor<RootTree, IntermediateTre
             .battery_level
             .load(std::sync::atomic::Ordering::Relaxed);
 
-        // Critical battery level check (below min_battery)
-        if current_level < battery_system.get_min_battery() {
-            for peer_id in self.storage_node.get_peers().read().await.iter() {
-                self.storage_node.send_low_battery_alert(*peer_id).await?;
+        if current_level < self.storage_node.get_min_battery() {
+            for peer_id in self.storage_node.get_peers() {
+                self.storage_node.send_low_battery_alert(peer_id)?;
             }
         }
 
-        // Zero battery check
         if current_level == 0 {
-            self.storage_node.send_suspension_notice().await?;
+            self.storage_node.send_suspension_notice()?;
 
-            // Wait for suspension period using web APIs
             wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, _| {
                 web_sys::window()
                     .unwrap()
@@ -75,19 +86,18 @@ impl<RootTree, IntermediateTreeManager> BatteryMonitor<RootTree, IntermediateTre
             .await
             .unwrap();
 
-            // Attempt to recharge
-            let synchronized_nodes = self.storage_node.get_peers().read().await.len() as u64;
-            battery_system.recharge(synchronized_nodes).await?;
+            let synchronized_nodes = self.storage_node.get_peers().len() as u64;
+            battery_system.recharge(synchronized_nodes).await;
 
             if battery_system
                 .battery_level
                 .load(std::sync::atomic::Ordering::Relaxed)
                 > 0
             {
-                self.storage_node.send_resume_notice().await?;
+                self.storage_node.send_resume_notice()?;
             }
         }
-        // Log battery status
+
         log::info!(
             "Battery Status - Level: {}%, Current: {}, Reward Multiplier: {}",
             charge_percentage,
@@ -97,7 +107,6 @@ impl<RootTree, IntermediateTreeManager> BatteryMonitor<RootTree, IntermediateTre
 
         Ok(())
     }
-
     pub fn get_monitoring_metrics(&self) -> BatteryMetrics {
         let battery_system = self.battery_system.read().unwrap();
         BatteryMetrics {
