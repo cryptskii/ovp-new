@@ -31,6 +31,42 @@ impl fmt::Display for SystemErrorType {
     }
 }
 
+// root_cell struct
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct RootCell {
+    pub capacity: u64,
+    pub lock_script: Script,
+    pub type_script: Script,
+    pub data: Vec<u8>,
+}
+
+// script struct
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct Script {
+    pub code_hash: H256,
+    pub hash_type: ScriptHashType,
+    pub args: Vec<u8>,
+    // pub hash_type: ScriptHashType,
+}
+
+// script_hash_type enum
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub enum ScriptHashType {
+    Data,
+    Type,
+}
+
+// h256 struct
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct H256(pub [u8; 32]);
+
+pub fn repr_hash(data: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let mut hash = [0u8; 32];
+    hash.copy_from_slice(&hasher.finalize());
+    hash
+}
 // Hash
 
 pub fn hash(data: &[u8]) -> [u8; 32] {
