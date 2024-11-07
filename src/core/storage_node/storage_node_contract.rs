@@ -1,6 +1,6 @@
 use crate::core::error::errors::SystemErrorType;
 use crate::core::error::SystemError;
-use crate::core::hierarchy::client::channel::channel_contract::Channel;
+
 use crate::core::storage_node::battery::BatteryChargingSystem;
 use crate::core::storage_node::epidemic::overlap::StorageOverlapManager;
 use crate::core::storage_node::epidemic::propagation::BatteryPropagation;

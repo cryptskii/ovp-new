@@ -26,7 +26,7 @@ impl ResponseManagerWrapper {
         response_threshold: u64,
         response_interval: u64,
     ) -> Result<ResponseManagerWrapper, JsValue> {
-        let storage_node: Arc<StorageNode<(), ()>> = serde_wasm_bindgen::from_value(storage_node)?;
+        let storage_node: Arc<StorageNode<(), ()>> = storage_node.into_serde().unwrap();
         Ok(ResponseManagerWrapper(ResponseManager {
             storage_node,
             response_threshold,
