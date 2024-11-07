@@ -1,8 +1,5 @@
 use crate::core::hierarchy::root::sparse_merkle_tree_r::SparseMerkleTreeR;
-use crate::core::state::boc::builder::Builder;
-use crate::core::state::boc::cell::Cell;
-use crate::core::types::MerkleProof;
-use crate::core::types::{BuilderData, SliceData, Transaction};
+
 use std::collections::HashMap;
 
 pub struct RootContract {
