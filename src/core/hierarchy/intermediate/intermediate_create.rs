@@ -1,13 +1,12 @@
 use crate::core::hierarchy::intermediate::intermediate_contract::IntermediateContract;
 use crate::core::hierarchy::intermediate::sparse_merkle_tree_i::SparseMerkleTreeI;
 use crate::core::hierarchy::intermediate::state_tracking_i::ProofInputsI;
-use crate::core::hierarchy::root::root_contract::RootContract;
+
 use crate::core::storage_node::storage_node_contract::StorageNode;
 use crate::core::types::boc::BOC;
-use crate::core::types::submission::RootSubmission;
 use log::{error, warn};
 use rand::{thread_rng, Rng};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "native")]
@@ -71,14 +70,11 @@ impl IntermediateContract {
         let zkp = self.generate_root_transition_proof(&new_root)?;
         let boc = self.generate_root_boc(&new_root, &zkp)?;
 
-        self.submit_to_root_contract(boc, zkp).await?;
+        self.submit_to_root_contract(boc, zkp.clone()).await?;
         self.update_storage_nodes_root_state(&new_root, &zkp)?;
-        self.state_tracker
-            .update_root(self.current_epoch(), new_root);
 
         Ok(())
     }
-
     fn calculate_intermediate_root(&self) -> Result<Vec<u8>, anyhow::Error> {
         let mut tree = SparseMerkleTreeI::new();
 
@@ -91,7 +87,7 @@ impl IntermediateContract {
     }
 
     fn generate_root_transition_proof(&self, new_root: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
-        let old_root = self.state_tracker.get_last_root().unwrap_or(&[0u8; 32]);
+        let old_root = self.get_last_root().unwrap_or(&[0u8; 32]);
 
         let inputs = ProofInputsI {
             old_root: old_root.to_vec(),
@@ -104,7 +100,7 @@ impl IntermediateContract {
     }
 
     fn generate_root_boc(&self, root: &[u8], zkp: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
-        let mut boc = BOC::new(0, 0);
+        let mut boc = BOC::new();
         boc.add_cell(root.to_vec())?;
         boc.add_cell(zkp.to_vec())?;
         boc.add_cell(self.current_epoch().to_le_bytes().to_vec())?;
@@ -115,18 +111,23 @@ impl IntermediateContract {
         &self,
         boc: Vec<u8>,
         zkp: Vec<u8>,
+        timestamp: u64,
+        zk_proof: Vec<u8>,
+        public_inputs: Vec<u64>,
+        merkle_root: Vec<u8>,
     ) -> Result<(), anyhow::Error> {
         let submission = RootSubmission {
             boc,
             zkp,
-            timestamp: SystemTime::now(),
-            zk_proof: vec![],
+            timestamp,
+            zk_proof,
+            public_inputs,
+            merkle_root,
         };
 
         self.destination_contract.submit_state(submission).await?;
         Ok(())
     }
-
     fn current_epoch(&self) -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -140,7 +141,6 @@ impl IntermediateContract {
         task::sleep(Duration::from_secs(5)).await;
         Ok(())
     }
-
     fn get_available_storage_nodes<R, I>() -> Result<Vec<StorageNode<R, I>>, anyhow::Error> {
         let mut nodes = Vec::new();
         let available_nodes = StorageNode::<R, I>::get_all_nodes()?;
