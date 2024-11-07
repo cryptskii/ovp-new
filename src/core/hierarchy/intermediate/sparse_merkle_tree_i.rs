@@ -24,7 +24,7 @@ struct Node {
 
 impl SparseMerkleTreeI {
     pub fn new() -> Self {
-        let config = PlonkConfig::standard_recursion_config();
+        let config = plonky2::plonk::config::PoseidonGoldilocksConfig::standard_recursion_config();
         Self {
             circuit_builder: ZkCircuitBuilder::new(config),
             plonky2_system: Plonky2System::new().unwrap(),

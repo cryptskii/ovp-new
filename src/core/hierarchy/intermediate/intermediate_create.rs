@@ -1,7 +1,9 @@
 use crate::core::hierarchy::intermediate::intermediate_contract::IntermediateContract;
 use crate::core::hierarchy::intermediate::sparse_merkle_tree_i::SparseMerkleTreeI;
 use crate::core::hierarchy::intermediate::state_tracking_i::ProofInputsI;
+use std::collections::HashMap;
 
+use crate::core::hierarchy::root::root_contract::RootContract;
 use crate::core::storage_node::storage_node_contract::StorageNode;
 use crate::core::types::boc::BOC;
 use log::{error, warn};
@@ -136,16 +138,15 @@ impl IntermediateContract {
         public_inputs: Vec<u64>,
         merkle_root: Vec<u8>,
     ) -> Result<(), anyhow::Error> {
-        let submission = RootSubmission {
+        // Remove the RootSubmission struct as it's not defined
+        self.destination_contract.submit_root(
             boc,
             zkp,
             timestamp,
             zk_proof,
             public_inputs,
             merkle_root,
-        };
-
-        self.destination_contract.submit_root = submission;
+        )?;
         self.calculate_intermediate_root()?;
         Ok(())
     }
