@@ -19,7 +19,7 @@ impl<K, V, RootTree, IntermediateTreeManager>
         synchronization_manager: Arc<
             RwLock<SynchronizationManager<RootTree, IntermediateTreeManager>>,
         >,
-        battery_propagation: Arc<RwLock<BatteryPropagation<RootTree>>>,
+        battery_propagation: Arc<RwLock<BatteryPropagation<RootTree, Contract>>>,
         redundancy_factor: f64,
         propagation_probability: f64,
     ) -> Self {
