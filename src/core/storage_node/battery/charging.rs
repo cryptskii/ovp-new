@@ -1,5 +1,3 @@
-// src/core/storage_node/battery/charging.rs
-
 use crate::core::error::errors::SystemErrorType;
 use std::sync::atomic::{AtomicU64, Ordering};
 use web_sys::window;
@@ -27,30 +25,25 @@ impl BatteryChargingSystem {
     pub async fn charge_for_processing(&self) -> Result<(), SystemErrorType> {
         let current_level = self.battery_level.load(Ordering::Acquire);
         if current_level < self.config.min_battery {
-            return Err(SystemErrorType::InsufficientBalance(
-                "Insufficient charge".into(),
-            ));
+            return Err(SystemErrorType::InsufficientBalance);
         }
         let now = window().unwrap().performance().unwrap().now() as u64;
         let last_charge = self.last_charge_time.load(Ordering::Acquire);
         if now - last_charge < self.config.charge_cooldown {
-            return Err(SystemErrorType::Generic(
-                "Charging too frequently".to_string(),
-            ));
+            return Err(SystemErrorType::SpendingLimitExceeded);
         }
         self.battery_level
             .fetch_sub(self.config.discharge_rate, Ordering::Release);
         self.update_reward_multiplier();
         Ok(())
     }
+
     pub async fn recharge(&self, synchronized_nodes: u64) -> Result<(), SystemErrorType> {
         let now = window().unwrap().performance().unwrap().now() as u64;
 
         let last_charge = self.last_charge_time.load(Ordering::Acquire);
         if now - last_charge < self.config.charge_cooldown {
-            return Err(SystemErrorType::Generic(
-                "Charging too frequently".to_string(),
-            ));
+            return Err(SystemErrorType::SpendingLimitExceeded);
         }
 
         let current_level = self.battery_level.load(Ordering::Acquire);
@@ -68,6 +61,7 @@ impl BatteryChargingSystem {
         self.update_reward_multiplier();
         Ok(())
     }
+
     fn update_reward_multiplier(&self) {
         let battery_percentage = self.get_charge_percentage();
         let multiplier = if battery_percentage >= 98.0 {
@@ -89,14 +83,10 @@ impl BatteryChargingSystem {
         let mut attempts = 0;
         while self.battery_level.load(Ordering::Acquire) < self.config.min_battery {
             if attempts >= self.config.max_charge_attempts {
-                return Err(SystemErrorType::Generic(
-                    "Max charging attempts exceeded".into(),
-                ));
+                return Err(SystemErrorType::SpendingLimitExceeded);
             }
             if self.battery_level.load(Ordering::Acquire) == 0 {
-                return Err(SystemErrorType::Generic(
-                    "Node suspended due to depleted battery".into(),
-                ));
+                return Err(SystemErrorType::InsufficientBalance);
             }
             let promise = js_sys::Promise::new(&mut |resolve, _| {
                 window()
