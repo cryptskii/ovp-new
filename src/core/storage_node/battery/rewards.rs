@@ -1,7 +1,7 @@
 // ./src/core/storage_node/battery/rewards.rs
 
-use crate::core::types::BatteryChargingSystem; // or `use crate::core::types::BatteryChargingSystem;`
-use crate::core::types::SystemError;
+use crate::core::error::errors::SystemError;
+use crate::core::storage_node::battery::charging::BatteryChargingSystem;
 use std::sync::Arc;
 use std::sync::RwLock;
 pub struct RewardDistributor {
