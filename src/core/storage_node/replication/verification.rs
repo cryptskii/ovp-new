@@ -6,16 +6,14 @@ use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;
 
-pub struct ReplicationVerificationManager<RootTree, IntermediateTreeManager> {
+pub struct VerificationManager<RootTree, IntermediateTreeManager> {
     storage_node: Arc<StorageNode<RootTree, IntermediateTreeManager>>,
     replication_threshold: u64,
     replication_interval: Duration,
     _phantom: PhantomData<IntermediateTreeManager>,
 }
 
-impl<RootTree, IntermediateTreeManager>
-    ReplicationVerificationManager<RootTree, IntermediateTreeManager>
-{
+impl<RootTree, IntermediateTreeManager> VerificationManager<RootTree, IntermediateTreeManager> {
     // Constructor
     pub fn new(
         storage_node: Arc<StorageNode<RootTree, IntermediateTreeManager>>,

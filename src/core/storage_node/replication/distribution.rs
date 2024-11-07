@@ -7,14 +7,14 @@ use wasm_bindgen_futures::{spawn_local, JsFuture};
 use web_sys::console;
 
 #[wasm_bindgen]
-pub struct ReplicationDistributionManager {
+pub struct DistributionManager {
     storage_node: JsValue,
     replication_threshold: u64,
     replication_interval: u32,
 }
 
 #[wasm_bindgen]
-impl ReplicationDistributionManager {
+impl DistributionManager {
     #[wasm_bindgen(constructor)]
     pub fn new(
         storage_node: JsValue,

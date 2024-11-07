@@ -11,21 +11,21 @@ pub fn new_replication_consistency_manager(
     storage_node: Arc<StorageNode<String, Vec<u8>>>,
     replication_threshold: u64,
     replication_interval: Duration,
-) -> ReplicationConsistencyManager {
-    ReplicationConsistencyManager {
+) -> ConsistencyManager {
+    ConsistencyManager {
         storage_node,
         replication_threshold,
         replication_interval,
     }
 }
 
-pub struct ReplicationConsistencyManager {
+pub struct ConsistencyManager {
     pub(crate) storage_node: Arc<StorageNode<String, Vec<u8>>>,
     pub(crate) replication_threshold: u64,
     pub(crate) replication_interval: Duration,
 }
 
-impl ReplicationConsistencyManager {
+impl ConsistencyManager {
     /// Method for checking consistency.
     pub async fn check_consistency(&self) -> Result<(), SystemError> {
         // Implement consistency checking logic here

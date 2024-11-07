@@ -1,5 +1,11 @@
+use crate::core::epidemic_protocol::EpidemicProtocol;
+use crate::core::error::errors::SystemErrorType;
+use crate::core::error::SystemError;
+use crate::core::hierarchy::intermediate::intermediate_tree_manager::IntermediateTreeManager;
 use crate::core::hierarchy::root::sparse_merkle_tree_r::SparseMerkleTreeR;
-
+use crate::core::storage_node::battery::BatteryChargingSystem;
+use crate::core::types::boc::BOC;
+use crate::core::zkps::proof::ZkProof;
 use anyhow::Result;
 use futures::lock::Mutex;
 use sha2::{Digest, Sha256};
@@ -24,16 +30,6 @@ impl ZkProof {
         // Implement your verification logic here
         Ok(true)
     }
-}
-
-#[derive(Debug)]
-pub enum SystemError {
-    InvalidStake(String),
-    InvalidProof(String),
-    BocNotFound(String),
-    ProofNotFound(String),
-    NetworkError(String),
-    Communication(String),
 }
 
 // Configuration settings for StorageNode
@@ -64,8 +60,10 @@ pub struct StorageNode<RootTree, IntermediateTree> {
     pub stored_bocs: Arc<Mutex<HashMap<[u8; 32], BOC>>>,
     pub stored_proofs: Arc<Mutex<HashMap<[u8; 32], ZkProof>>>,
     pub battery_system: Arc<Mutex<BatteryChargingSystem>>,
+
     pub root_tree: RootTree,
-    pub intermediate_tree_manager: Arc<Mutex<IntermediateTreeManager>>,
+    pub intermediate_tree: IntermediateTree,
+    pub intermediate_tree_manager: Arc<Mutex<IntermediateTreeManager<RootTree, IntermediateTree>>>,
     pub config: StorageNodeConfig,
     intermediate_trees: Arc<Mutex<HashMap<u64, RootTree>>>,
     root_trees: Arc<Mutex<HashMap<u64, RootTree>>>,
@@ -78,11 +76,13 @@ impl<RootTree, IntermediateTree> StorageNode<RootTree, IntermediateTree> {
         initial_stake: u64,
         config: StorageNodeConfig,
         root_tree: RootTree,
-        intermediate_tree_manager: IntermediateTreeManager,
+        intermediate_tree: IntermediateTree,
+        intermediate_tree_manager: IntermediateTreeManager<RootTree, IntermediateTree>,
         peers: HashSet<[u8; 32]>,
     ) -> Result<Self, SystemError> {
         if initial_stake < 1000 {
-            return Err(SystemError::InvalidStake(
+            return Err(SystemError::new(
+                SystemErrorType::InvalidStake,
                 "Insufficient initial stake".to_string(),
             ));
         }
@@ -106,6 +106,7 @@ impl<RootTree, IntermediateTree> StorageNode<RootTree, IntermediateTree> {
             config,
             battery_system: Arc::new(Mutex::new(battery_charging_system)),
             root_tree,
+            intermediate_tree,
             intermediate_tree_manager: Arc::new(Mutex::new(intermediate_tree_manager)),
             epidemic_protocol: Arc::new(Mutex::new(epidemic_protocol)),
         })
@@ -116,7 +117,10 @@ impl<RootTree, IntermediateTree> StorageNode<RootTree, IntermediateTree> {
         battery_system.charge_for_processing()?;
 
         if !self.verify_proof_internal(&proof, &boc)? {
-            return Err(SystemError::InvalidProof("Invalid proof".to_string()));
+            return Err(SystemError::new(
+                SystemErrorType::InvalidProof,
+                "Invalid proof".to_string(),
+            ));
         }
 
         let boc_id = self.hash_boc_internal(&boc);
@@ -144,17 +148,19 @@ impl<RootTree, IntermediateTree> StorageNode<RootTree, IntermediateTree> {
 
     pub async fn retrieve_boc(&self, boc_id: &[u8; 32]) -> Result<BOC, SystemError> {
         let bocs = self.stored_bocs.lock().await;
-        bocs.get(boc_id)
-            .cloned()
-            .ok_or_else(|| SystemError::BocNotFound("BOC not found".to_string()))
+        bocs.get(boc_id).cloned().ok_or_else(|| {
+            SystemError::new(SystemErrorType::BocNotFound, "BOC not found".to_string())
+        })
     }
 
     pub async fn retrieve_proof(&self, proof_id: &[u8; 32]) -> Result<ZkProof, SystemError> {
         let proofs = self.stored_proofs.lock().await;
-        proofs
-            .get(proof_id)
-            .cloned()
-            .ok_or_else(|| SystemError::ProofNotFound("Proof not found".to_string()))
+        proofs.get(proof_id).cloned().ok_or_else(|| {
+            SystemError::new(
+                SystemErrorType::ProofNotFound,
+                "Proof not found".to_string(),
+            )
+        })
     }
 
     pub async fn add_peer(&self, peer_id: [u8; 32]) -> Result<(), SystemError> {

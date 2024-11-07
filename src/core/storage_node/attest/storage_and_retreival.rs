@@ -26,10 +26,10 @@ impl<RootTree, IntermediateTreeManager>
         }
     }
 
-    pub async fn store_data(&self, boc: RootTree, proof: ZkProof) -> Result<(), SystemError> {
+    pub async fn store_data(&self, boc: BOC, proof: ZkProof) -> Result<(), SystemError> {
         self.storage_node
             .as_ref()
-            .store_update(boc, proof)
+            .store_update(&boc, &proof)
             .await
             .map_err(|e| SystemError::new(SystemErrorType::InvalidAmount, e.to_string()))?;
         Ok(())
