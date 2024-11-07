@@ -83,7 +83,7 @@ impl ChannelManager {
             .map_err(|_| Error::InvalidTransaction)?
             .get(channel_id)
             .cloned()
-            .ok_or(Error::ChannelNotFound)
+            .ok_or(Error::ChannelNotFound("Channel not found".to_string()))
     }
 
     fn create_channel(

@@ -1,5 +1,5 @@
 // src/core/hierarchy/client/wallet_extension/state_tracking.rs
-
+use crate::core::error::errors::*;
 use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
 use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::{
     PrivateChannelState, StateTransition,
@@ -11,60 +11,6 @@ use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use wasm_bindgen::JsValue;
-
-/// Custom Error type for this module
-#[derive(Debug)]
-pub enum Error {
-    CustomError(String),
-    SerializationError(String),
-    DeserializationError(String),
-    LockError(String),
-    ChannelNotFound(String),
-    StateNotFound(String),
-    InvalidBOC(String),
-    ArithmeticError(String),
-}
-
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Error::CustomError(msg) => write!(f, "Custom Error: {}", msg),
-            Error::SerializationError(msg) => write!(f, "Serialization Error: {}", msg),
-            Error::DeserializationError(msg) => write!(f, "Deserialization Error: {}", msg),
-            Error::LockError(msg) => write!(f, "Lock Error: {}", msg),
-            Error::ChannelNotFound(msg) => write!(f, "Channel Not Found: {}", msg),
-            Error::StateNotFound(msg) => write!(f, "State Not Found: {}", msg),
-            Error::InvalidBOC(msg) => write!(f, "Invalid BOC: {}", msg),
-            Error::ArithmeticError(msg) => write!(f, "Arithmetic Error: {}", msg),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
-
-impl From<serde_json::Error> for Error {
-    fn from(err: serde_json::Error) -> Self {
-        Error::SerializationError(err.to_string())
-    }
-}
-
-impl<T> From<std::sync::PoisonError<T>> for Error {
-    fn from(_err: std::sync::PoisonError<T>) -> Self {
-        Error::LockError("Lock Poisoned".to_string())
-    }
-}
-
-impl From<std::io::Error> for Error {
-    fn from(err: std::io::Error) -> Self {
-        Error::CustomError(format!("IO Error: {}", err))
-    }
-}
-
-impl From<JsValue> for Error {
-    fn from(err: JsValue) -> Self {
-        Error::CustomError(format!("JsValue Error: {:?}", err))
-    }
-}
 
 /// Tracks wallet balances and state transitions
 #[derive(Clone, Debug)]
@@ -115,7 +61,10 @@ impl WalletBalanceTracker {
         self.pending_updates.push(transition);
 
         // Update state tree
-        let mut state_tree = self.state_tree.write().map_err(|e| Error::from(e))?;
+        let mut state_tree = self
+            .state_tree
+            .write()
+            .map_err(|e| Error::CustomError(format!("RwLock poisoned: {:?}", e)))?;
 
         let serialized_boc = state_boc
             .serialize()
@@ -316,11 +265,13 @@ impl<WalletRoot> RootStateTracker<WalletRoot> {
             self.pending_roots.clear();
 
             // Create wallet root
-            let wallet_root = WalletRoot {
-                root: aggregated_root,
-                merkle_proofs,
+
+            let wallet_root = WalletRoot::new(
+                aggregated_root,
                 balance,
-            };
+                self.current_epoch,
+                merkle_proofs.clone(),
+            );
 
             // Add to history
             self.root_history.push(wallet_root.clone());
