@@ -1,5 +1,5 @@
 use crate::core::error::errors::{SystemError, SystemErrorType};
-use crate::core::zkps::plonky2::{Plonky2SystemHandle, PlonkyError};
+use crate::core::zkps::plonky2::Plonky2SystemHandle;
 use plonky2::hash::hash_types::RichField;
 use plonky2::plonk::circuit_data::CircuitConfig;
 use serde::{Deserialize, Serialize};
@@ -105,7 +105,6 @@ impl<F: RichField> ProofVerifier<F> {
 
         // Extract values
         let sender_balance = proof.public_inputs[0];
-        let recipient_balance = proof.public_inputs[1];
         let amount = proof.public_inputs[2];
         let fee = proof.public_inputs[3];
 

@@ -5,7 +5,6 @@
 pub mod destination_contract;
 pub mod intermediate_contract;
 
-pub mod proof_exporter_i;
 //pub mod settlement_i;
 pub mod intermediate_contract_types;
 pub mod sparse_merkle_tree_i;

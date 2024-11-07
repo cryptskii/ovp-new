@@ -1,5 +1,5 @@
 use crate::core::zkps::plonky2::Plonky2SystemHandle;
-use crate::core::zkps::proof::{ProofBundle, ProofType, ZkProof};
+use crate::core::zkps::proof::{ProofType, ZkProof};
 use js_sys::Uint8Array;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
