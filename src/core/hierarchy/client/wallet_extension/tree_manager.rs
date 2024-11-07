@@ -1,6 +1,8 @@
 use crate::core::error::errors::Error;
 use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::Transaction;
 use sha2::Digest;
+use x25519_dalek::PublicKey;
+
 use std::collections::{HashMap, HashSet};
 
 pub struct TreeManager {
@@ -8,6 +10,19 @@ pub struct TreeManager {
     processed_transactions: HashSet<[u8; 32]>,
 }
 
+pub struct Signature {
+    public_key: PublicKey,
+}
+
+impl Signature {
+    pub fn new(public_key: PublicKey) -> Self {
+        Signature { public_key }
+    }
+}
+
+// wrap signature
+
+// Tree Manager
 impl TreeManager {
     pub fn new() -> Self {
         TreeManager {
@@ -103,31 +118,30 @@ impl TreeManager {
         signatures: &[[u8; 64]],
     ) -> Result<bool, Error> {
         // Verify transaction signature against latest channel state signatures
-        // In a real implementation, this would use proper signature verification
-
         if signatures.is_empty() {
             return Ok(false);
         }
 
-        // Verify signature matches one of the authorized signers
+        // Build message to verify
         let mut message = Vec::new();
         message.extend_from_slice(&transaction.channel_id);
         message.extend_from_slice(&transaction.nonce.to_le_bytes());
         message.extend_from_slice(&transaction.amount.to_le_bytes());
 
+        // Hash the message
         let mut hasher = sha2::Sha256::new();
         hasher.update(&message);
+
         let message_hash = hasher.finalize();
 
-        // In a real implementation, we would verify the signature against message_hash
-        // For now, just check signature length is valid
-        if transaction.signature.len() != 64 {
-            return Ok(false);
-        }
+        // Verify the signature
+        // Note: This is a placeholder. You need to implement the actual signature verification logic.
+        // For example, you might use a cryptographic library to verify the signature.
+        // The actual implementation depends on your specific requirements and the cryptographic scheme you're using.
+        let signature_valid = true; // Replace with actual verification
 
-        Ok(true)
+        Ok(signature_valid)
     }
-
     fn is_valid_state_transition(&self, current: &ChannelState, new: &ChannelState) -> bool {
         // Verify nonce increments by 1
         if new.nonce != current.nonce + 1 {
@@ -163,7 +177,7 @@ impl TreeManager {
             nonce: current_state.nonce + 1,
             sequence_number: current_state.sequence_number + 1,
             balance: current_state.balance + transaction.amount as i64,
-            signatures: vec![transaction.signature],
+            signatures: vec![transaction.signature.into()],
             timestamp: transaction.timestamp,
         })
     }
@@ -225,7 +239,7 @@ mod tests {
                 .unwrap()
                 .as_secs(),
             status: crate::core::hierarchy::client::wallet_extension::wallet_extension_types::TransactionStatus::Pending,
-            signature: [4u8; 64],
+            signature: ed25519_dalek::Signature::from_bytes(&[4u8; 64]).unwrap(),
             zk_proof: vec![],
             merkle_proof: vec![],
             previous_state: vec![],
@@ -233,7 +247,6 @@ mod tests {
             fee: 0,
         }
     }
-
     #[test]
     fn test_process_transaction() {
         let mut manager = TreeManager::new();

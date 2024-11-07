@@ -1,9 +1,6 @@
-use crate::core::error::errors;
-use crate::core::error::errors::{SystemError, SystemErrorType};
+use crate::core::error::errors::{Error, SystemError, SystemErrorType};
 use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
 
-use crate::core::error::errors::Error;
-use crate::core::hierarchy::client::wallet_extension::state_tracking::WalletBalanceTracker;
 use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::{
     Transaction, TransactionStatus,
 };

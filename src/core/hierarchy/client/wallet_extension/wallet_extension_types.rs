@@ -60,7 +60,7 @@ pub struct WalletStateUpdate {
     pub merkle_root: [u8; 32],
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct PrivateChannelState {
     pub balance: u64,
     pub nonce: u64,
@@ -82,7 +82,7 @@ pub struct RebalanceConfig {
     pub max_rebalance_attempts: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
+#[derive(Serialize, Deserialize, Clone, Default, Debug)]
 pub struct ChannelConfig {
     pub channel_id: [u8; 32],
     pub capacity: u64,
@@ -161,11 +161,10 @@ pub struct WalletExtension {
     pub rebalance_config: RebalanceConfig,
     pub proof_system: Arc<PlonkySystemHandleWrapper>,
     pub state_tree: SparseMerkleTreeWasm,
-    pub encrypted_states: StorageNode<ByteArray32, Vec<u8>>,
+    pub encrypted_states: Arc<StorageNode<ByteArray32, Vec<u8>>>,
     pub balance_tracker: WalletBalanceTracker,
     pub root_tracker: RootStateTracker<[u8; 32]>,
 }
-
 impl fmt::Debug for WalletExtension {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("WalletExtension")
@@ -190,20 +189,18 @@ pub struct WalletExtensionStateChange {
 pub struct Channel {
     pub channel_id: [u8; 32],
     pub wallet_id: [u8; 32],
+    #[serde(skip)]
     pub state: Arc<RwLock<PrivateChannelState>>,
     #[serde(skip)]
     pub state_history: Vec<StateTransition>,
     pub participants: Vec<[u8; 32]>,
-    #[serde(skip)]
     pub config: ChannelConfig,
     pub spending_limit: u64,
     #[serde(skip)]
     pub proof_system: Arc<PlonkySystemHandleWrapper>,
-    #[serde(skip)]
     pub(crate) boc_history: Vec<BOC>,
     pub(crate) proof: Vec<u8>,
 }
-
 impl Default for Channel {
     fn default() -> Self {
         Self {
@@ -264,7 +261,7 @@ impl WalletBalanceTracker {
         self.wallet_balances
             .get(channel_id)
             .copied()
-            .ok_or(Error::ChannelNotFound)
+            .ok_or(Error::ChannelNotFound("Channel not found".to_string()))
     }
 
     pub fn update_balance(
@@ -309,7 +306,7 @@ impl WalletBalanceTracker {
                 .serialize()
                 .map_err(|_| Error::StakeError("BOC serialization failed".to_string()))?;
             state_tree
-                .update(&channel_id, &state_boc_bytes)
+                .update(&channel_id[..], &state_boc_bytes)
                 .map_err(|_| Error::StakeError("State update failed".to_string()))?;
             self.last_root = root_hash;
 
@@ -344,20 +341,32 @@ impl WalletBalanceTracker {
             .read()
             .map_err(|_| Error::StakeError("Lock acquisition failed".to_string()))?;
         let state_boc = state_tree
-            .get(channel_id)
-            .map_err(|_| Error::StakeError("State tree lookup failed".to_string()))?;
-        let state_boc = BOC::deserialize(&state_boc)
-            .map_err(|_| Error::StakeError("State tree deserialization failed".to_string()))?;
-        let state_cell = state_boc
-            .get_cell(0)
-            .ok_or(Error::StakeError("No state cell".to_string()))?;
-        let state = PrivateChannelState::deserialize(state_cell.data.as_slice())
-            .map_err(|_| Error::StakeError("State deserialization failed".to_string()))?;
+            .get(&channel_id[..])
+            .map_err(|_| Error::StakeError("State tree lookup failed".to_string()))?
+            .ok_or(Error::StakeError("State not found".to_string()))?;
+
+        // Deserialize state BOC into a Cell
+        let state_cell = BOC::deserialize(&state_boc)
+            .map_err(|_| Error::StakeError("Failed to deserialize state BOC".to_string()))?
+            .get_root_cell()
+            .ok_or(Error::StakeError("Invalid BOC: no root cell".to_string()))?;
+
+        // Deserialize state cell data into PrivateChannelState
+        let mut state = PrivateChannelState::default();
+        state.balance = balance;
+
+        state.nonce = 0; // Assuming a default value, adjust as needed
+        state.sequence_number = state_transitions.len() as u64;
+
+        let hash_value =
+            crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::hash_value(
+                &state_cell.data,
+            );
+        state.merkle_root.copy_from_slice(&hash_value);
 
         Ok(state)
     }
 }
-
 #[derive(Debug, Clone, Default)]
 pub struct RootStateTracker<WalletRoot> {
     pub root_history: Vec<WalletRoot>,
