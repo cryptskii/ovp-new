@@ -78,7 +78,7 @@ impl<RootTree: 'static, IntermediateTreeManager: 'static>
     }
 
     async fn check_synchronization_boost(&self) -> Result<(), SystemError> {
-        let synchronization_boost = self.storage_node.stored_bocs.read().await.len() as u64;
+        let synchronization_boost = self.storage_node.stored_bocs.lock().await.len() as u64;
         let synchronization_boost =
             synchronization_boost.saturating_sub(self.min_synchronization_boost);
         let synchronization_boost = synchronization_boost.min(self.max_synchronization_boost);
@@ -86,10 +86,11 @@ impl<RootTree: 'static, IntermediateTreeManager: 'static>
         if synchronization_boost > self.synchronization_boost.load(Ordering::Relaxed) {
             self.storage_node
                 .battery_system
-                .write()
+                .lock()
                 .await
                 .recharge(synchronization_boost)
-                .await?;
+                .await
+                .map_err(SystemError::from)?;
             self.synchronization_boost
                 .store(synchronization_boost, Ordering::Relaxed);
         }

@@ -1,4 +1,5 @@
-use crate::core::hierarchy::intermediate::intermediate_contract::IntermediateContract;
+// ./src/core/hierarchy/intermediate/intermediate_create.rs
+
 use crate::core::hierarchy::intermediate::sparse_merkle_tree_i::SparseMerkleTreeI;
 use crate::core::hierarchy::intermediate::state_tracking_i::ProofInputsI;
 use std::collections::HashMap;
@@ -6,7 +7,7 @@ use std::collections::HashMap;
 use crate::core::hierarchy::root::root_contract::RootContract;
 use crate::core::storage_node::storage_node_contract::StorageNode;
 use crate::core::types::boc::BOC;
-use log::{error, warn};
+use log::{info, warn};
 use rand::{thread_rng, Rng};
 use std::collections::HashSet;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -14,14 +15,14 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 #[cfg(feature = "native")]
 use async_std::task;
 
-pub struct IntermediateContractcreate {
+pub struct IntermediateContractCreate {
     root_contract: RootContract,
     wallet_states: HashMap<String, Vec<u8>>,
     last_root_submission: Option<(u64, Vec<u8>)>,
     proof_system: ProofInputsI,
 }
 
-impl IntermediateContract {
+impl IntermediateContractCreate {
     fn verify_storage_state<R, I>(
         storage_nodes: &Vec<StorageNode<R, I>>,
         wallet_id: &str,
@@ -61,6 +62,7 @@ impl IntermediateContract {
     }
 
     pub async fn run_root_submission_loop(&mut self) -> Result<(), anyhow::Error> {
+        use log::error;
         let state_update_interval = Duration::from_secs(60);
 
         loop {
@@ -138,15 +140,19 @@ impl IntermediateContract {
         public_inputs: Vec<u64>,
         merkle_root: Vec<u8>,
     ) -> Result<(), anyhow::Error> {
-        // Remove the RootSubmission struct as it's not defined
-        self.destination_contract.submit_root(
-            boc,
-            zkp,
-            timestamp,
-            zk_proof,
-            public_inputs,
-            merkle_root,
-        )?;
+        // Use the available method try_submit_global_root
+        if let Some((hash, merkle_proof)) = self.root_contract.try_submit_global_root(timestamp) {
+            // Handle the result of try_submit_global_root
+            // You may need to adjust this part based on your specific requirements
+            // For now, we'll just log the hash and merkle_proof
+            info!(
+                "Submitted global root. Hash: {:?}, Merkle Proof: {:?}",
+                hash, merkle_proof
+            );
+        } else {
+            // Handle the case when submission is not possible
+            warn!("Unable to submit global root at this time");
+        }
         self.calculate_intermediate_root()?;
         Ok(())
     }

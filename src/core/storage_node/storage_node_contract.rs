@@ -1,6 +1,8 @@
 use crate::core::error::errors::SystemErrorType;
 use crate::core::error::SystemError;
 
+use crate::core::epidemic::EpidemicProtocol;
+use crate::core::hierarchy::intermediate::IntermediateTreeManager;
 use crate::core::storage_node::battery::BatteryChargingSystem;
 
 use crate::core::types::boc::BOC;
@@ -96,11 +98,11 @@ impl<RootTree, IntermediateTree> StorageNode<RootTree, IntermediateTree> {
         battery_system
             .charge_for_processing()
             .await
-            .map_err(|e| SystemError::new(SystemErrorType::BatteryError, e.to_string()))?;
+            .map_err(|e| SystemError::new(SystemErrorType::BatterySystemError, e.to_string()))?;
 
         if !self.verify_proof_internal(&proof, &boc)? {
             return Err(SystemError::new(
-                SystemErrorType::InvalidProof,
+                SystemErrorType::InvalidProofError,
                 "Invalid proof".to_string(),
             ));
         }
@@ -132,15 +134,21 @@ impl<RootTree, IntermediateTree> StorageNode<RootTree, IntermediateTree> {
 
     pub async fn retrieve_boc(&self, boc_id: &[u8; 32]) -> Result<BOC, SystemError> {
         let bocs = self.stored_bocs.lock().await;
-        bocs.get(boc_id)
-            .cloned()
-            .ok_or_else(|| SystemError::new(SystemErrorType::NotFound, "BOC not found".to_string()))
+        bocs.get(boc_id).cloned().ok_or_else(|| {
+            SystemError::new(
+                SystemErrorType::DataNotFoundError,
+                "BOC not found".to_string(),
+            )
+        })
     }
 
     pub async fn retrieve_proof(&self, proof_id: &[u8; 32]) -> Result<ZkProof, SystemError> {
         let proofs = self.stored_proofs.lock().await;
         proofs.get(proof_id).cloned().ok_or_else(|| {
-            SystemError::new(SystemErrorType::NotFound, "Proof not found".to_string())
+            SystemError::new(
+                SystemErrorType::DataNotFoundError,
+                "Proof not found".to_string(),
+            )
         })
     }
 
