@@ -1,35 +1,21 @@
-// ./src/core/hierarchy/intermediate/intermediate_create.rs
-
-// Intermediate Create
-// This module is responsible for creating the intermediate contracts and managing the state of the root contract.
-// It handles the creation of the intermediate contracts, the management of the root contract state, and the
-// communication between the root contract and the intermediate contracts. It also handles the submission of the proofs to the intermediate contracts.
-
-use crate::core::hierarchy::intermediate::IntermediateContract;
-use crate::core::hierarchy::root_contract::RootContract;
-use crate::core::state::boc::cell_serialization::BOC;
+use crate::core::hierarchy::intermediate::intermediate_contract::IntermediateContract;
+use crate::core::hierarchy::intermediate::sparse_merkle_tree_i::SparseMerkleTreeI;
+use crate::core::hierarchy::intermediate::state_tracking_i::ProofInputsI;
+use crate::core::hierarchy::root::root_contract::RootContract;
 use crate::core::storage_node::storage_node::StorageNode;
-use crate::core::types::RootSubmission;
-use std::collections::HashMap;
-use std::time::SystemTime;
-
-use crate::core::hierarchy::state_tracking_i::ProofInputsI;
+use crate::core::types::boc::BOC;
+use crate::core::types::submission::RootSubmission;
+use log::{error, warn};
+use rand::{thread_rng, Rng};
+use std::collections::{HashMap, HashSet};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[cfg(feature = "native")]
 use async_std::task;
 
-use super::SparseMerkleTreeI;
-
-pub struct IntermediateCreate {
-    root_contract: RootContract,
-    wallet_states: HashMap<String, Vec<u8>>,
-    last_root_submission: Option<(u64, Vec<u8>)>,
-    proof_system: ProofInputsI,
-}
-
 impl IntermediateContract {
-    fn verify_storage_state(
-        storage_nodes: &Vec<StorageNode>,
+    fn verify_storage_state<R, I>(
+        storage_nodes: &Vec<StorageNode<R, I>>,
         wallet_id: &str,
     ) -> Result<(), anyhow::Error> {
         let nodes_for_wallet = storage_nodes
@@ -42,7 +28,7 @@ impl IntermediateContract {
             Self::trigger_state_replication(wallet_id)?;
         }
 
-        let state_hashes: std::collections::HashSet<_> = nodes_for_wallet
+        let state_hashes: HashSet<_> = nodes_for_wallet
             .iter()
             .map(|node| node.get_state_hash(wallet_id))
             .collect::<Result<_, anyhow::Error>>()?;
@@ -67,14 +53,14 @@ impl IntermediateContract {
     }
 
     pub async fn run_root_submission_loop(&mut self) -> Result<(), anyhow::Error> {
-        let state_update_interval = std::time::Duration::from_secs(60);
+        let state_update_interval = Duration::from_secs(60);
 
         loop {
             #[cfg(feature = "native")]
             async_std::task::sleep(state_update_interval).await;
 
             if let Err(e) = self.prepare_and_submit_root_state().await {
-                log::error!("Root state submission failed: {}", e);
+                error!("Root state submission failed: {}", e);
                 Self::handle_submission_error(e).await?;
             }
         }
@@ -87,7 +73,8 @@ impl IntermediateContract {
 
         self.submit_to_root_contract(boc, zkp).await?;
         self.update_storage_nodes_root_state(&new_root, &zkp)?;
-        self.last_root_submission = Some((self.current_epoch(), new_root.clone()));
+        self.state_tracker
+            .update_root(self.current_epoch(), new_root);
 
         Ok(())
     }
@@ -104,11 +91,7 @@ impl IntermediateContract {
     }
 
     fn generate_root_transition_proof(&self, new_root: &[u8]) -> Result<Vec<u8>, anyhow::Error> {
-        let old_root = self
-            .last_root_submission
-            .as_ref()
-            .map(|(_, root)| root.as_slice())
-            .unwrap_or(&[0u8; 32]);
+        let old_root = self.state_tracker.get_last_root().unwrap_or(&[0u8; 32]);
 
         let inputs = ProofInputsI {
             old_root: old_root.to_vec(),
@@ -137,55 +120,82 @@ impl IntermediateContract {
             boc,
             zkp,
             timestamp: SystemTime::now(),
-            zk_proof: todo!(),
+            zk_proof: vec![],
         };
 
-        self.root_contract.submit_state(submission).await?;
+        self.destination_contract.submit_state(submission).await?;
         Ok(())
     }
 
     fn current_epoch(&self) -> u64 {
         SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
+            .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs()
     }
 
     async fn handle_submission_error(error: anyhow::Error) -> Result<(), anyhow::Error> {
-        log::warn!("Handling submission error: {}", error);
+        warn!("Handling submission error: {}", error);
         #[cfg(feature = "native")]
-        task::sleep(std::time::Duration::from_secs(5)).await;
+        task::sleep(Duration::from_secs(5)).await;
         Ok(())
     }
 
-    fn get_available_storage_nodes() -> Result<Vec<StorageNode>, anyhow::Error> {
-        // Implementation needed
-        unimplemented!()
+    fn get_available_storage_nodes<R, I>() -> Result<Vec<StorageNode<R, I>>, anyhow::Error> {
+        let mut nodes = Vec::new();
+        let available_nodes = StorageNode::<R, I>::get_all_nodes()?;
+
+        for node in available_nodes {
+            if node.is_available() && node.has_capacity() {
+                nodes.push(node);
+            }
+        }
+
+        Ok(nodes)
     }
 
-    fn find_node_with_state(
+    fn find_node_with_state<R, I>(
         wallet_id: &str,
-        nodes: &[StorageNode],
-    ) -> Result<StorageNode, anyhow::Error> {
-        // Implementation needed
-        unimplemented!()
+        nodes: &[StorageNode<R, I>],
+    ) -> Result<StorageNode<R, I>, anyhow::Error> {
+        nodes
+            .iter()
+            .find(|node| node.has_wallet_state(wallet_id))
+            .cloned()
+            .ok_or_else(|| anyhow::anyhow!("No node found with wallet state"))
     }
 
-    fn select_replication_targets(
-        nodes: &[StorageNode],
+    fn select_replication_targets<R, I>(
+        nodes: &[StorageNode<R, I>],
         count: usize,
-    ) -> Result<Vec<StorageNode>, anyhow::Error> {
-        // Implementation needed
-        unimplemented!()
+    ) -> Result<Vec<StorageNode<R, I>>, anyhow::Error> {
+        let mut rng = thread_rng();
+        let mut selected = HashSet::new();
+        let mut targets = Vec::new();
+
+        while targets.len() < count && selected.len() < nodes.len() {
+            let idx = rng.gen_range(0..nodes.len());
+            if selected.insert(idx) {
+                targets.push(nodes[idx].clone());
+            }
+        }
+
+        if targets.len() < count {
+            return Err(anyhow::anyhow!("Insufficient nodes for replication"));
+        }
+
+        Ok(targets)
     }
 
-    fn replicate_state(
+    fn replicate_state<R, I>(
         wallet_id: &str,
-        source: &StorageNode,
-        target: &StorageNode,
+        source: &StorageNode<R, I>,
+        target: &StorageNode<R, I>,
     ) -> Result<(), anyhow::Error> {
-        // Implementation needed
-        unimplemented!()
+        let state_data = source.get_wallet_state(wallet_id)?;
+        target.store_wallet_state(wallet_id, state_data)?;
+        target.verify_stored_state(wallet_id)?;
+        Ok(())
     }
 
     fn update_storage_nodes_root_state(
@@ -193,7 +203,24 @@ impl IntermediateContract {
         new_root: &[u8],
         zkp: &[u8],
     ) -> Result<(), anyhow::Error> {
-        // Implementation needed
-        unimplemented!()
+        let nodes = Self::get_available_storage_nodes()?;
+        let update_data = RootStateUpdate {
+            root: new_root.to_vec(),
+            proof: zkp.to_vec(),
+            timestamp: SystemTime::now(),
+        };
+
+        for node in nodes {
+            node.update_root_state(&update_data)?;
+        }
+
+        Ok(())
     }
+}
+
+#[derive(Clone)]
+struct RootStateUpdate {
+    root: Vec<u8>,
+    proof: Vec<u8>,
+    timestamp: SystemTime,
 }

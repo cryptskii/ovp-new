@@ -1,7 +1,6 @@
 // src/core/storage_node/battery/charging.rs
 
-use crate::core::types::ovp_types::StorageNodeConfig;
-use crate::core::types::SystemErrorType;
+use crate::core::error::errors::SystemErrorType;
 use std::sync::atomic::{AtomicU64, Ordering};
 use web_sys::window;
 
@@ -29,13 +28,13 @@ impl BatteryChargingSystem {
         let current_level = self.battery_level.load(Ordering::Acquire);
 
         if current_level < self.config.min_battery {
-            return Err(SystemErrorType::InsufficientCharge(
+            return Err(SystemErrorType::InsufficientBalance(
                 "Insufficient charge".into(),
             ));
         }
 
         if current_level < self.config.discharge_rate {
-            return Err(SystemErrorType::InsufficientCharge(
+            return Err(SystemErrorType::InsufficientBalance(
                 "Discharge rate exceeds current level".into(),
             ));
         }
@@ -50,7 +49,7 @@ impl BatteryChargingSystem {
 
         let last_charge = self.last_charge_time.load(Ordering::Acquire);
         if now - last_charge < self.config.charge_cooldown {
-            return Err(SystemErrorType::BatteryError(
+            return Err(SystemErrorType::Other(
                 "Charging too frequently".to_string(),
             ));
         }
@@ -91,12 +90,12 @@ impl BatteryChargingSystem {
         let mut attempts = 0;
         while self.battery_level.load(Ordering::Acquire) < self.config.min_battery {
             if attempts >= self.config.max_charge_attempts {
-                return Err(SystemErrorType::BatteryError(
+                return Err(SystemErrorType::Other(
                     "Max charging attempts exceeded".into(),
                 ));
             }
             if self.battery_level.load(Ordering::Acquire) == 0 {
-                return Err(SystemErrorType::NodeSuspended(
+                return Err(SystemErrorType::Other(
                     "Node suspended due to depleted battery".into(),
                 ));
             }

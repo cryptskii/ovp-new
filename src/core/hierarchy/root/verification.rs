@@ -1,7 +1,7 @@
 // src/core/hierarchy/root/verification.rs
-use crate::core::hierarchy::intermediate_verifier::VerificationError;
+use crate::core::hierarchy::root::global_state::GlobalState;
 use crate::core::hierarchy::root::sparse_merkle_tree_r::*;
-use crate::core::types::ovp_types::GlobalState;
+use crate::core::hierarchy::root::verification::VerificationError;
 use plonky2::plonk::proof::Proof as PlonkyProof;
 use subtle::ConstantTimeEq;
 
@@ -9,7 +9,7 @@ pub struct RootVerification;
 
 impl RootVerification {
     /// Verifies the integrity of an epoch.
-    pub fn verify_epoch(epoch: &GlobalState, proof: &PlonkyProof) -> Result<(), VerificationError> {
+    pub fn verify_epoch<F, C, D>(epoch: &GlobalState, proof: &PlonkyProof<F, C, D>) -> Result<()> {
         // Verify epoch number is valid
         if epoch.number == 0 {
             return Err(VerificationError::InvalidEpochNumber);

@@ -5,7 +5,7 @@
 // Clients pay a challenge fee, reimbursed with each successful challenge, along with a portion of the slashing penalty placed on the storage node.
 use crate::core::error::errors::SystemError;
 use crate::core::storage_node::storage_node::StorageNode;
-use crate::core::types::ChallengeRecord;
+use crate::core::storage_node::attest::ChallengeRecord;
 use crate::core::types::SystemError;
 use js_sys::Promise;
 use std::sync::Arc;

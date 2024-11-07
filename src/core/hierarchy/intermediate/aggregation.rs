@@ -1,8 +1,7 @@
 // src/core/hierarchy/intermediate/aggregation.rs
 
 use crate::core::hierarchy::intermediate::intermediate_tree_manager::IntermediateTreeManager;
-use crate::core::types::ovp_types::*;
-
+use crate::core::types::*;
 pub struct Aggregator;
 
 impl Aggregator {
