@@ -1,8 +1,9 @@
 // src/core/global/global_tree_manager.rs
 
-use crate::core::error::errors::{SystemError, SystemErrorType, ZkProofError, ZkProofErrorType};
+use crate::core::error::errors::{SystemError, SystemErrorType, ZkProofError};
 use crate::core::zkps::proof::ZkProof;
 use blake2::{Blake2b, Digest};
+use crate::core::storage_node::storage_node_contract::StorageNode;
 
 pub struct GlobalTreeManager;
 
@@ -14,8 +15,12 @@ impl GlobalTreeManager {
     ) -> Result<(), ZkProofError> {
         // Verify the proof first
         if !proof.verify() {
-            return Err(ZkProofError::VerificationError);
-        }
+            return Err(ZkProofError::new(
+                ZkProofErrorType::InvalidProof,
+                "Invalid proof".to_string(),
+            )); 
+
+        
 
         // Store the intermediate root in some persistent storage
         // This is a placeholder - actual implementation would depend on storage mechanism
