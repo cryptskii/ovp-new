@@ -3,14 +3,13 @@ use crate::core::error::SystemError;
 use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
 use crate::core::types::boc::BOC;
 use crate::core::types::ovp_ops::WalletOpCode;
-use crate::core:: // Added for proof verification
 use crate::core::zkps::plonky2::Plonky2SystemHandle;
 use crate::core::zkps::proof::ZkProof;
 use js_sys::{Date, Promise, Uint8Array};
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen;
 use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::convert::TryFrom;
 use std::sync::{Arc, RwLock};
 use wasm_bindgen::prelude::*;
@@ -19,7 +18,7 @@ use wasm_bindgen_futures::future_to_promise;
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT: &'static str = r#"
 interface ByteArray32 {
-  toArray(): Uint8Array;
+    toArray(): Uint8Array;
 }
 "#;
 
@@ -66,44 +65,6 @@ pub struct WalletExtension {
     root_tracker: RootStateTracker,
 }
 
-#[wasm_bindgen]
-impl WalletExtension {
-    #[wasm_bindgen(constructor)]
-    pub fn create(
-        wallet_id: Uint8Array,
-        rebalance_config_js: JsValue,
-        _proof_system_js: JsValue,
-    ) -> Result<WalletExtension, JsValue> {
-        console_error_panic_hook::set_once();
-
-        let wallet_id_bytes: Vec<u8> = wallet_id.to_vec();
-        let wallet_id_array = ByteArray32::new(&wallet_id_bytes)?;
-
-        let rebalance_config: RebalanceConfig = serde_wasm_bindgen::from_value(rebalance_config_js)
-            .map_err(|e| {
-                JsValue::from_str(&format!("Failed to deserialize RebalanceConfig: {:?}", e))
-            })?;
-
-        let proof_system = Arc::new(Plonky2SystemHandle::new().map_err(|e| {
-            JsValue::from_str(&format!(
-                "Failed to initialize Plonky2SystemHandle: {:?}",
-                e
-            ))
-        })?);
-
-        Ok(WalletExtension {
-            wallet_id: wallet_id_array,
-            channels: HashMap::new(),
-            total_locked_balance: 0,
-            rebalance_config,
-            proof_system,
-            state_tree: SparseMerkleTreeWasm::new(),
-            encrypted_states: WalletStorageManager::default(),
-            balance_tracker: WalletBalanceTracker::new(),
-            root_tracker: RootStateTracker::default(),
-        })
-    }
-}
 #[wasm_bindgen]
 impl WalletExtension {
     #[wasm_bindgen(constructor)]
@@ -157,72 +118,53 @@ impl WalletExtension {
                         bincode::deserialize(&params_vec).map_err(|e| {
                             JsValue::from_str(&format!("Failed to deserialize params: {:?}", e))
                         })?;
-
                     let channel_id =
                         wallet_extension.create_channel(params).await.map_err(|e| {
                             JsValue::from_str(&format!("Failed to create channel: {:?}", e))
                         })?;
                     Ok(Uint8Array::from(&channel_id[..]).into())
                 }
-
                 WalletOpCode::UpdateChannel => {
                     let (channel_id_bytes, update): ([u8; 32], ChannelUpdate) =
                         bincode::deserialize(&params_vec).map_err(|e| {
                             JsValue::from_str(&format!("Failed to deserialize params: {:?}", e))
                         })?;
-
                     let channel_id = ByteArray32(channel_id_bytes);
-
                     wallet_extension
                         .update_channel(&channel_id.0, update)
                         .await
                         .map_err(|e| {
                             JsValue::from_str(&format!("Channel update failed: {:?}", e))
                         })?;
-
                     Ok(JsValue::null())
                 }
-
                 WalletOpCode::UpdateWalletState => {
                     let new_state: WalletStateUpdate =
                         bincode::deserialize(&params_vec).map_err(|e| {
                             JsValue::from_str(&format!("Failed to deserialize new state: {:?}", e))
                         })?;
-
                     let state_boc = wallet_extension
                         .update_wallet_state(new_state)
                         .await
                         .map_err(|e| JsValue::from_str(&format!("State update failed: {:?}", e)))?;
-
                     Ok(JsValue::from(Uint8Array::from(
                         &state_boc.serialize().unwrap()[..],
                     )))
                 }
-
                 WalletOpCode::UpdateBalance => {
                     let (amount, proof_bytes): (u64, Vec<u8>) = bincode::deserialize(&params_vec)
                         .map_err(|e| {
                         JsValue::from_str(&format!("Failed to deserialize balance update: {:?}", e))
                     })?;
                     let proof = ZkProof::new(proof_bytes, Vec::new(), Vec::new(), 0);
-                    let new_state = WalletStateUpdate {
-                        old_balance: 0,
-                        old_nonce: 0,
-                        new_balance: 0,
-                        new_nonce: 0,
-                        transfer_amount: 0,
-                        merkle_root: [0; 32],
-                    };
                     wallet_extension
                         .update_balance(amount, proof)
                         .await
                         .map_err(|e| {
                             JsValue::from_str(&format!("Balance update failed: {:?}", e))
                         })?;
-
                     Ok(JsValue::null())
                 }
-
                 WalletOpCode::CreateTransaction => {
                     let tx_request: TransactionRequest = bincode::deserialize(&params_vec)
                         .map_err(|e| {
@@ -231,33 +173,16 @@ impl WalletExtension {
                                 e
                             ))
                         })?;
-
                     let (tx, proof_bytes) = wallet_extension
                         .create_transaction(tx_request)
                         .await
                         .map_err(|e| {
                         JsValue::from_str(&format!("Transaction creation failed: {:?}", e))
                     })?;
-                    let proof = ZkProof::new(proof_bytes, Vec::new(), Vec::new(), 0);
-                    let new_state = WalletStateUpdate {
-                        old_balance: 0,
-                        old_nonce: 0,
-                        new_balance: 0,
-                        new_nonce: 0,
-                        transfer_amount: 0,
-                        merkle_root: [0; 32],
-                    };
-
-                    wallet_extension
-                        .update_wallet_state(new_state)
-                        .await
-                        .map_err(|e| JsValue::from_str(&format!("State update failed: {:?}", e)))?;
-
                     Ok(JsValue::from(Uint8Array::from(
                         &tx.serialize().unwrap()[..],
                     )))
                 }
-
                 WalletOpCode::GenerateWalletProof => {
                     let proof_request: ProofRequest =
                         bincode::deserialize(&params_vec).map_err(|e| {
@@ -266,10 +191,14 @@ impl WalletExtension {
                                 e
                             ))
                         })?;
-                    // Remove the call to generate_wallet_proof as it's not implemented
-                    Ok(JsValue::null())
+                    let proof = wallet_extension
+                        .generate_wallet_proof(proof_request)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to generate proof: {:?}", e))
+                        })?;
+                    Ok(JsValue::from(Uint8Array::from(&proof.serialize()?[..])))
                 }
-
                 WalletOpCode::VerifyWalletProof => {
                     let (proof, statement): (ZkProof, ProofStatement) =
                         bincode::deserialize(&params_vec).map_err(|e| {
@@ -278,225 +207,140 @@ impl WalletExtension {
                                 e
                             ))
                         })?;
-                    let is_valid = self.verify_proof(proof, statement).await.map_err(|e| {
-                        JsValue::from_str(&format!("Proof verification failed: {:?}", e))
-                    })?;
-
+                    let is_valid = wallet_extension
+                        .verify_proof(proof, statement)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Proof verification failed: {:?}", e))
+                        })?;
                     Ok(JsValue::from_bool(is_valid))
+                }
+                WalletOpCode::CloseChannel => {
+                    let closure_params: ChannelClosureParams = bincode::deserialize(&params_vec)
+                        .map_err(|e| {
+                            JsValue::from_str(&format!(
+                                "Failed to deserialize closure params: {:?}",
+                                e
+                            ))
+                        })?;
+                    wallet_extension
+                        .close_channel(closure_params)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Channel closure failed: {:?}", e))
+                        })?;
+                    Ok(JsValue::null())
+                }
+                WalletOpCode::ValidateChannel => {
+                    let validation_params: ChannelValidationParams =
+                        bincode::deserialize(&params_vec).map_err(|e| {
+                            JsValue::from_str(&format!(
+                                "Failed to deserialize validation params: {:?}",
+                                e
+                            ))
+                        })?;
+                    let is_valid = wallet_extension
+                        .validate_channel(validation_params)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Channel validation failed: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_bool(is_valid))
+                }
+                WalletOpCode::UpdateWalletTree => {
+                    let tree_update: WalletTreeUpdate =
+                        bincode::deserialize(&params_vec).map_err(|e| {
+                            JsValue::from_str(&format!(
+                                "Failed to deserialize tree update: {:?}",
+                                e
+                            ))
+                        })?;
+                    wallet_extension
+                        .update_wallet_tree(tree_update)
+                        .await
+                        .map_err(|e| JsValue::from_str(&format!("Tree update failed: {:?}", e)))?;
+                    Ok(JsValue::null())
+                }
+                WalletOpCode::SyncState => {
+                    let sync_params: StateSyncParams =
+                        bincode::deserialize(&params_vec).map_err(|e| {
+                            JsValue::from_str(&format!(
+                                "Failed to deserialize sync params: {:?}",
+                                e
+                            ))
+                        })?;
+                    wallet_extension
+                        .sync_state(sync_params)
+                        .await
+                        .map_err(|e| JsValue::from_str(&format!("State sync failed: {:?}", e)))?;
+                    Ok(JsValue::null())
+                }
+                WalletOpCode::RebalanceChannel => {
+                    let rebalance_params: RebalanceParams = bincode::deserialize(&params_vec)
+                        .map_err(|e| {
+                            JsValue::from_str(&format!(
+                                "Failed to deserialize rebalance params: {:?}",
+                                e
+                            ))
+                        })?;
+                    wallet_extension
+                        .rebalance_channel(rebalance_params)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Channel rebalancing failed: {:?}", e))
+                        })?;
+                    Ok(JsValue::null())
+                }
+                WalletOpCode::DisputeState => {
+                    let dispute_params: DisputeParams =
+                        bincode::deserialize(&params_vec).map_err(|e| {
+                            JsValue::from_str(&format!(
+                                "Failed to deserialize dispute params: {:?}",
+                                e
+                            ))
+                        })?;
+                    wallet_extension
+                        .dispute_state(dispute_params)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("State dispute failed: {:?}", e))
+                        })?;
+                    Ok(JsValue::null())
+                }
+                WalletOpCode::FinalizeState => {
+                    let finalize_params: FinalizeStateParams = bincode::deserialize(&params_vec)
+                        .map_err(|e| {
+                            JsValue::from_str(&format!(
+                                "Failed to deserialize finalize params: {:?}",
+                                e
+                            ))
+                        })?;
+                    wallet_extension
+                        .finalize_state(finalize_params)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("State finalization failed: {:?}", e))
+                        })?;
+                    Ok(JsValue::null())
                 }
             }
         })
     }
-
-    async fn create_channel(&mut self, params: CreateChannelParams) -> Result<[u8; 32], Error> {
-        let channel_id = generate_channel_id(&self.wallet_id.0, &params.counterparty.0)?;
-
-        let initial_state = PrivateChannelState {
-            balance: params.initial_balance,
-            nonce: 0,
-            sequence_number: 0,
-            ..Default::default()
-        };
-
-        let state_boc = BOC::default();
-
-        let channel = Channel::new(
-            channel_id,
-            self.wallet_id.0,
-            initial_state,
-            vec![self.wallet_id.0, params.counterparty.0],
-            params.config,
-            params.spending_limit,
-            self.proof_system.clone(),
-        );
-
-        self.state_tree
-            .update(&channel_id, &state_boc.serialize().unwrap())
-            .map_err(|_| Error::InvalidTransaction)?;
-
-        self.channels
-            .insert(channel_id, Arc::new(RwLock::new(channel)));
-
-        Ok(channel_id)
-    }
-
-    async fn update_channel(
-        &mut self,
-        channel_id: &[u8; 32],
-        update: ChannelUpdate,
-    ) -> Result<(), Error> {
-        let channel = self.get_channel(channel_id)?;
-        let mut channel = channel
-            .write()
-            .map_err(|_| Error::WalletError("Failed to acquire channel write lock".to_string()))?;
-
-        channel.state = update.new_state.clone();
-
-        if let Some(transitions) = self.balance_tracker.state_transitions.get_mut(channel_id) {
-            transitions.push(channel.state.merkle_root.to_vec());
-        }
-
-        Ok(())
-    }
-
-    async fn update_wallet_state(&mut self, new_state: WalletStateUpdate) -> Result<BOC, Error> {
-        let mut state_boc = BOC::default();
-        let serialized_state = bincode::serialize(&new_state).map_err(|e| {
-            Error::SerializationError(format!("Failed to serialize new state: {:?}", e))
-        })?;
-        state_boc
-            .set_data(&serialized_state)
-            .map_err(|e| Error::SerializationError(format!("Failed to set data: {:?}", e)))?;
-        state_boc.set_merkle_root(new_state.merkle_root);
-
-        let old_root = self
-            .state_tree
-            .root()
-            .map_err(|e| Error::StorageError(format!("Failed to get state root: {:?}", e)))?;
-        let old_root_cell = self
-            .state_tree
-            .get(&old_root)
-            .map_err(|e| Error::StorageError(format!("Failed to get state root cell: {:?}", e)))?;
-        // Prepare the inputs for the proof
-        let old_balance = new_state.old_balance;
-        let old_nonce = new_state.old_nonce;
-        let new_balance = new_state.new_balance;
-        let new_nonce = new_state.new_nonce;
-        let transfer_amount = new_state.transfer_amount;
-        // Generate the proof using Plonky2SystemHandle
-        let proof_bytes = self
-            .proof_system
-            .generate_proof_js(
-                old_balance,
-                old_nonce,
-                new_balance,
-                new_nonce,
-                transfer_amount,
-            )
-            .map_err(|_| {
-                Error::ZkProofError(crate::core::error::errors::ZkProofError::InvalidProof)
-            })?;
-        let proof = ZkProof::new(
-            proof_bytes.clone(),
-            vec![
-                old_balance,
-                old_nonce,
-                new_balance,
-                new_nonce,
-                transfer_amount,
-            ],
-            new_state.merkle_root.to_vec(),
-            current_timestamp(),
-        );
-
-        state_boc
-            .set_proof(&proof_bytes)
-            .map_err(|e| Error::SerializationError(format!("Failed to set proof: {:?}", e)))?;
-
-        self.state_tree
-            .update(&self.wallet_id.0, &state_boc.serialize().unwrap())
-            .map_err(|_| Error::InvalidTransaction)?;
-
-        self.encrypted_states.insert_state(
-            self.wallet_id.0,
-            &serialized_state,
-            new_state.merkle_root,
-            proof.clone(),
-        )?;
-
-        self.root_tracker.add_root(WalletRoot {
-            root_id: new_state.merkle_root,
-            wallet_merkle_proofs: vec![],
-            aggregated_balance: new_state.new_balance,
-        });
-
-        Ok(state_boc)
-    }
-    async fn create_transaction(
-        &mut self,
-        request: TransactionRequest,
-    ) -> Result<(Transaction, Vec<u8>), Error> {
-        let channel = self.get_channel(&request.channel_id.0)?;
-        let mut channel_guard = channel
-            .write()
-            .map_err(|_| Error::WalletError("Failed to acquire channel write lock".to_string()))?;
-
-        let tx = Transaction {
-            id: generate_tx_id(),
-            channel_id: request.channel_id.0,
-            sender: self.wallet_id.0,
-            recipient: request.recipient.0,
-            amount: request.amount,
-            nonce: channel_guard.get_next_nonce(),
-            sequence_number: channel_guard.get_next_sequence(),
-            timestamp: current_timestamp(),
-            status: TransactionStatus::Pending,
-            signature: Signature::default(),
-            zk_proof: vec![],
-            merkle_proof: vec![],
-            previous_state: vec![],
-            new_state: vec![],
-            fee: request.fee,
-        };
-
-        let signature = generate_signature(&tx, &self.wallet_id.0)?;
-        let mut tx = tx;
-        tx.signature = Signature(signature);
-
-        // Generate the proof using Plonky2SystemHandle
-        let proof_bytes = self
-            .proof_system
-            .generate_proof_js(
-                channel_guard.state.balance,
-                channel_guard.state.nonce,
-                channel_guard.state.balance - tx.amount,
-                channel_guard.state.nonce + 1,
-                tx.amount,
-            )
-            .map_err(|e| {
-                Error::ZkProofError(crate::core::error::errors::ZkProofError::InvalidProof)
-            })?;
-
-        // Process the transaction
-        channel_guard.process_transaction(tx.clone())?;
-
-        Ok((tx, proof_bytes))
-    }
-
-    fn get_channel(&self, channel_id: &[u8; 32]) -> Result<Arc<RwLock<Channel>>, Error> {
-        self.channels
-            .get(channel_id)
-            .cloned()
-            .ok_or_else(|| Error::ChannelNotFound)
-    }
-
-    async fn update_balance(&mut self, amount: u64, proof: ZkProof) -> Result<(), Error> {
-        // Verify the proof using Plonky2SystemHandle
-        let is_valid = self
-            .proof_system
-            .verify_proof_js(&proof.proof_data)
-            .map_err(|_| Error::InvalidProof)?;
-
-        if !is_valid {
-            return Err(Error::InvalidProof);
-        }
-
-        self.total_locked_balance = amount;
-        Ok(())
-    }
 }
 
 // Helper functions
-fn generate_channel_id(wallet_id: &[u8; 32], counterparty: &[u8; 32]) -> [u8; 32] {
+fn generate_channel_id(wallet_id: &[u8; 32], counterparty: &[u8; 32]) -> Result<[u8; 32], Error> {
     let mut hasher = Sha256::new();
     hasher.update(wallet_id);
     hasher.update(counterparty);
     hasher.update(&current_timestamp().to_le_bytes());
-
-    let result = hasher.finalize();
     let mut channel_id = [0u8; 32];
-    channel_id.copy_from_slice(&result[..32]);
-    channel_id
+    channel_id.copy_from_slice(&hasher.finalize());
+    Ok(channel_id)
+}
+
+fn current_timestamp() -> u64 {
+    (Date::now() / 1000.0) as u64
 }
 
 fn generate_tx_id() -> [u8; 32] {
@@ -506,10 +350,6 @@ fn generate_tx_id() -> [u8; 32] {
     let mut tx_id = [0u8; 32];
     tx_id.copy_from_slice(&result[..32]);
     tx_id
-}
-
-fn current_timestamp() -> u64 {
-    (Date::now() / 1000.0) as u64
 }
 
 fn generate_signature(tx: &Transaction, private_key: &[u8; 32]) -> Result<[u8; 64], Error> {
