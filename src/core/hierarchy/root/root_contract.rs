@@ -1,3 +1,5 @@
+// ./src/core/hierarchy/root/root_contract.rs
+
 use crate::core::error::errors::{SystemError, SystemErrorType};
 use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::Transaction;
 use crate::core::hierarchy::root::sparse_merkle_tree_r::SparseMerkleTreeR;
