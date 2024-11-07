@@ -1,6 +1,5 @@
-// src/core/hierarchy/root/verification.rs
-use crate::core::error::errors::SystemError;
 use crate::core::hierarchy::root::global_state::GlobalState;
+use crate::core::hierarchy::root::intermediate_verifier::VerificationError;
 use crate::core::hierarchy::root::sparse_merkle_tree_r::*;
 use plonky2::plonk::proof::Proof as PlonkyProof;
 use subtle::ConstantTimeEq;
@@ -11,10 +10,10 @@ impl RootVerification {
     /// Verifies the integrity of an epoch.
     pub fn verify_epoch<
         F: plonky2::hash::hash_types::RichField + plonky2::field::types::Field,
-        C: plonky2::plonk::circuit_data::CircuitData<F>,
+        C: plonky2::plonk::config::GenericConfig<D, F = F>,
         const D: usize,
     >(
-        epoch: &GlobalState,
+        epoch: &GlobalState<StateTransitionRecord>,
         proof: &PlonkyProof<F, C, D>,
     ) -> Result<()> {
         // Verify epoch number is valid

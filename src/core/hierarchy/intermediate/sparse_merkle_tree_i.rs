@@ -1,4 +1,5 @@
 use crate::core::error::errors::SystemError;
+use crate::core::hierarchy::root::SparseMerkleTreeR;
 use crate::core::types::boc::BOC;
 use crate::core::zkps::circuit_builder::{Column, VirtualCell, ZkCircuitBuilder};
 use crate::core::zkps::plonky2::Plonky2System;
@@ -7,6 +8,15 @@ use plonky2::field::goldilocks_field::GoldilocksField;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
+/// Intermediate Tree Trait
+pub trait IntermediateTreeManagerTrait {
+    fn update_trees(
+        &mut self,
+        boc: &BOC,
+        intermediate_trees: &mut HashMap<[u8; 32], SparseMerkleTreeI>,
+        root_trees: &mut HashMap<[u8; 32], SparseMerkleTreeI>,
+    ) -> Result<(), SystemError>;
+}
 pub struct SparseMerkleTreeI {
     circuit_builder: ZkCircuitBuilder<GoldilocksField, 2>,
     plonky2_system: Plonky2System,

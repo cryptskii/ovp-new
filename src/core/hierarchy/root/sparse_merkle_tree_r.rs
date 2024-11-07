@@ -3,6 +3,20 @@ use std::collections::HashMap;
 
 type Hash = [u8; 32];
 
+/// Root Tree Trait
+pub trait RootTreeTrait {
+    fn root(&self) -> Hash;
+    fn calculate_root_hash(&mut self) -> Hash;
+    fn update_leaf(&mut self, key: Hash, value: Hash);
+    fn verify_leaf(&self, key: Hash, value: Hash) -> bool;
+    fn calculate_merkle_proof(&self, key: &[u8]) -> Result<MerkleProofRoot>;
+    fn verify_merkle_proof(&self, key: &[u8], proof: &MerkleProofRoot) -> Result<bool>;
+    fn generate_proof(&self) -> MerkleProofRoot;
+    fn serialize(&self) -> Result<Cell>;
+    fn deserialize(cell: Cell) -> Result<Self>
+    where
+        Self: std::marker::Sized;
+}
 // MerkleProof implementation
 #[derive(Clone, Debug)]
 struct MerkleProofRoot {

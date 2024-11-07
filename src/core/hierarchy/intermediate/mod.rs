@@ -14,7 +14,7 @@ pub mod state_tracking_i;
 // Re-exporting the types for convenience
 pub use destination_contract::DestinationContract;
 pub use intermediate_contract::IntermediateContract;
-pub use intermediate_create::IntermediateContractcreate;
+pub use intermediate_create::IntermediateContractCreate;
 pub use intermediate_tree_manager::IntermediateTreeManager;
 pub use proof_exporter_i::ProofExporterI;
 pub use settlement_i::SettlementIntermediate;
