@@ -46,6 +46,7 @@ impl RootContract {
 
         // Update global tree
         self.global_tree.update_leaf(contract_addr.into(), root);
+        // self.global_tree.update_leaf(contract_addr.into(), root);
 
         Ok(())
     }
@@ -62,6 +63,10 @@ impl RootContract {
         self.epoch += 1;
         self.last_submission = now;
 
+        // Verify the global root
+        if !self.verify_global_state(root, proof) {
+            return None;
+        }
         Some((root, proof))
     }
 
@@ -96,6 +101,7 @@ impl RootContract {
         builder.append_u64(self.epoch)?;
         builder.append_u64(self.epoch_duration)?;
         builder.append_u64(self.last_submission)?;
+        builder.append_u8(self.verify_settlement_state as u8)?;
 
         // Serialize global tree
         let tree_cell = self.global_tree.serialize()?;
@@ -119,6 +125,7 @@ impl RootContract {
         let epoch = slice.get_u64()?;
         let epoch_duration = slice.get_u64()?;
         let last_submission = slice.get_u64()?;
+        let verify_settlement_state = slice.get_u8()?;
 
         // Deserialize global tree
         let tree_cell = slice.reference(0)?;
@@ -159,6 +166,7 @@ pub enum Error {
     UnknownContract,
     SerializationError(String),
     DeserializationError(String),
+    InvalidSettlementState,
 }
 
 // Helper types

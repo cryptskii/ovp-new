@@ -58,9 +58,8 @@ impl<RootTree> SettlementIntermediate<RootTree> {
         // Verify the settlement state against the root contract
         if !self
             .root_contract
-            .as_ref()
             .verify_settlement_state(channel_id, settlement_state.clone())
-            .await
+            .await?
         {
             return Err(SystemError::InvalidSettlementState);
         }
