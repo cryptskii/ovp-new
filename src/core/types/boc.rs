@@ -323,16 +323,6 @@ impl From<SystemError> for Error {
     }
 }
 
-// Cell and BOC definitions
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Cell {
-    pub data: Vec<u8>,
-    pub references: Vec<usize>,
-    pub cell_type: CellType,
-    pub merkle_hash: [u8; 32],
-    pub proof: Option<Vec<u8>>, // Added field for proof data
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CellType {
     Ordinary,
