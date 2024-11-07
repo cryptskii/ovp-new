@@ -4,12 +4,11 @@ use crate::core::zkps::circuit_builder::{Column, VirtualCell, ZkCircuitBuilder};
 use crate::core::zkps::plonky2::Plonky2System;
 use crate::core::zkps::proof::ZkProof;
 use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 pub struct SparseMerkleTreeI {
-    circuit_builder: ZkCircuitBuilder<GoldilocksField>,
+    circuit_builder: ZkCircuitBuilder<GoldilocksField, 2>,
     plonky2_system: Plonky2System,
     root_hash: [u8; 32],
     nodes: HashMap<[u8; 32], Node>,
@@ -57,10 +56,8 @@ impl SparseMerkleTreeI {
         key_cell: Column,
         value_cell: Column,
     ) -> Result<(), SystemError> {
-        let mut current = self.circuit_builder.poseidon(vec![
-            VirtualCell::new(key_cell),
-            VirtualCell::new(value_cell),
-        ]);
+        let cells = [VirtualCell::new(key_cell), VirtualCell::new(value_cell)];
+        let mut current = self.circuit_builder.poseidon(&cells);
 
         for (sibling, is_left) in path {
             let sibling_cell = self.circuit_builder.add_virtual_target();
@@ -69,15 +66,12 @@ impl SparseMerkleTreeI {
                 VirtualCell::new(Column::new(self.hash_to_field(sibling))),
             );
 
-            if *is_left {
-                current = self
-                    .circuit_builder
-                    .poseidon(vec![current, VirtualCell::new(sibling_cell)]);
+            let cells = if *is_left {
+                [current, VirtualCell::new(sibling_cell)]
             } else {
-                current = self
-                    .circuit_builder
-                    .poseidon(vec![VirtualCell::new(sibling_cell), current]);
-            }
+                [VirtualCell::new(sibling_cell), current]
+            };
+            current = self.circuit_builder.poseidon(&cells);
         }
 
         let root_cell = self.circuit_builder.add_virtual_public_input();
@@ -108,8 +102,14 @@ impl SparseMerkleTreeI {
 
         let witness = self.generate_witness(key, value, path)?;
         self.plonky2_system
-            .generate_proof(&public_inputs, &witness)
-            .map(|proof| ZkProof::new(proof))
+            .generate_proof(
+                &self.circuit_builder,
+                &self.circuit_data,
+                &public_inputs,
+                &witness,
+                &mut self.rng,
+            )
+            .map(ZkProof::new)
             .map_err(|_| SystemError::InvalidProof)
     }
 
