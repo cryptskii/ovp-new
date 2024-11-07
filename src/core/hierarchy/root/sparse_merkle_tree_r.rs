@@ -3,6 +3,42 @@ use std::collections::HashMap;
 
 type Hash = [u8; 32];
 
+const TREE_HEIGHT: usize = 256;
+
+fn get_bit(bytes: &[u8], index: usize) -> bool {
+    let byte_index = index / 8;
+    if byte_index >= bytes.len() {
+        return false;
+    }
+    let bit_index = 7 - (index % 8);
+    (bytes[byte_index] >> bit_index) & 1 == 1
+}
+
+fn hash_key(key: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(key);
+    let mut hash = [0; 32];
+    hash.copy_from_slice(&hasher.finalize());
+    hash
+}
+
+fn hash_value(value: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(value);
+    let mut hash = [0; 32];
+    hash.copy_from_slice(&hasher.finalize());
+    hash
+}
+
+fn hash_pair(left: &[u8], right: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(left);
+    hasher.update(right);
+    let mut hash = [0; 32];
+    hash.copy_from_slice(&hasher.finalize());
+    hash
+}
+
 /// Root Tree Trait
 pub trait RootTreeTrait {
     fn root(&self) -> Hash;
@@ -100,111 +136,14 @@ impl SparseMerkleTreeR {
         hash
     }
 
-    pub fn update_leaf(&mut self, key: Hash, value: Hash) {
-        let mut current = self.root_hash;
-        let mut path = Vec::new();
-
-        // Traverse tree to find insertion point
-        while let Some(node) = self.nodes.get(&current) {
-            path.push(current);
-            let direction = key[0] & 1;
-            current = if direction == 0 {
-                node.left.as_ref().map(|n| *n).unwrap_or([0; 32])
-            } else {
-                node.right.as_ref().map(|n| *n).unwrap_or([0; 32])
-            };
-        }
-
-        // Create new leaf node
-        let new_node = Node {
-            key: key.to_vec(),
-            value: value.to_vec(),
-            left: None,
-            right: None,
-        };
-
-        // Insert new node
-        let node_hash = self.calculate_node_hash(&new_node);
-        self.nodes.insert(node_hash, new_node);
-
-        // Update path to root
-        for parent_hash in path.into_iter().rev() {
-            if let Some(parent) = self.nodes.get_mut(&parent_hash) {
-                let direction = key[0] & 1;
-                if direction == 0 {
-                    parent.left = Some(Box::new(self.nodes.get(&node_hash).unwrap().clone()));
-                } else {
-                    parent.right = Some(Box::new(self.nodes.get(&node_hash).unwrap().clone()));
-                }
-            }
-        }
-
-        self.calculate_root_hash();
-    }
+    // Verify leaf
 
     pub fn verify_leaf(&self, key: Hash, value: Hash) -> bool {
-        let mut current = self.root_hash;
-
-        while let Some(node) = self.nodes.get(&current) {
-            if node.key.as_slice() == key && node.value.as_slice() == value {
-                return true;
-            }
-
-            let direction = key[0] & 1;
-            current = if direction == 0 {
-                node.left.as_ref().map(|n| *n).unwrap_or([0; 32])
-            } else {
-                node.right.as_ref().map(|n| *n).unwrap_or([0; 32])
-            };
-        }
-
-        false
+        todo!()
     }
 
     pub fn calculate_merkle_proof(&self, key: &[u8]) -> Result<MerkleProofRoot> {
-        let mut proof = MerkleProofRoot::new();
-        let mut current = self.root_hash;
-
-        while let Some(node) = self.nodes.get(&current) {
-            proof.path.push(self.calculate_node_hash(node).to_vec());
-
-            if node.key == key {
-                proof.value = node.value.clone();
-                break;
-            }
-
-            let direction = key[0] & 1;
-            current = if direction == 0 {
-                node.left.as_ref().map(|n| *n).unwrap_or([0; 32])
-            } else {
-                node.right.as_ref().map(|n| *n).unwrap_or([0; 32])
-            };
-        }
-
-        if proof.value.is_empty() {
-            Err(Error::InvalidProof)
-        } else {
-            Ok(proof)
-        }
-    }
-
-    pub fn verify_merkle_proof(&self, key: &[u8], proof: &MerkleProofRoot) -> Result<bool> {
-        let mut current = self.root_hash;
-
-        while let Some(node) = self.nodes.get(&current) {
-            if node.key == key && node.value == proof.value {
-                return Ok(true);
-            }
-
-            let direction = key[0] & 1;
-            current = if direction == 0 {
-                node.left.as_ref().map(|n| *n).unwrap_or([0; 32])
-            } else {
-                node.right.as_ref().map(|n| *n).unwrap_or([0; 32])
-            };
-        }
-
-        Ok(false)
+        todo!()
     }
 
     pub fn generate_proof(&self) -> MerkleProofRoot {
