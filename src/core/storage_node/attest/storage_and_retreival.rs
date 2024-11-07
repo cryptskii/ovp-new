@@ -3,7 +3,8 @@
 // Storage and Retrieval Verification
 // This module is the entry point for accessing the storage nodes' storage and retrieval capabilities.
 // It provides methods for storing and retrieving data, as well as verifying the proofs provided by the storage nodes.
-use crate::core::error::errors::SystemError;
+use crate::core::error::errors::{SystemError, SystemErrorType};
+
 use crate::core::storage_node::storage_node_contract::StorageNode;
 use crate::core::types::boc::BOC;
 use crate::core::zkps::proof::ZkProof;
@@ -28,9 +29,9 @@ impl<RootTree, IntermediateTreeManager>
     pub async fn store_data(&self, boc: RootTree, proof: ZkProof) -> Result<(), SystemError> {
         self.storage_node
             .as_ref()
-            .store_data(boc, proof)
+            .store_update(boc, proof)
             .await
-            .map_err(|e| SystemError::new(SystemErrorType::StorageError, e.to_string()))?;
+            .map_err(|e| SystemError::new(SystemErrorType::InvalidAmount, e.to_string()))?;
         Ok(())
     }
 
