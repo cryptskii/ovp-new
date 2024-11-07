@@ -1,5 +1,5 @@
-use crate::core::types::SystemError;
-use crate::core::types::BOC;
+use crate::core::error::errors::SystemError;
+use crate::core::types::boc::BOC;
 /// Intermediate tree manager
 use std::collections::HashMap;
 use std::sync::Arc;

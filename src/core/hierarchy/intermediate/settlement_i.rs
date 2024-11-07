@@ -1,8 +1,7 @@
-use crate::core::hierarchy::IntermediateTreeManager;
-
-use crate::core::hierarchy::root_contract::RootContract;
+use crate::core::hierarchy::root::root_contract::RootContract;
 use crate::core::storage_node::storage_node_contract::StorageNode;
-use crate::core::types::ovp_types::{SystemError, ZkProof, BOC};
+use crate::core::types::boc::BOC;
+use crate::core::zkps::proof::ZkProof;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -119,6 +118,7 @@ impl<RootTree> SettlementIntermediate<RootTree> {
             .ok_or(SystemError::ProofNotFound)?;
 
         self.root_contract
+            .as_ref()
             .submit_settlement(channel_id, settlement_state.clone(), proof.clone())
             .await?;
 
