@@ -1,4 +1,4 @@
-use crate::core::error::errors::SystemError;
+use crate::core::error::errors::{SystemError, SystemErrorType};
 use crate::core::types::boc::{Cell, CellType, BOC};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::iop::target::Target;
@@ -57,7 +57,7 @@ impl SparseMerkleTreeI {
             height: 256,
             virtual_cells: HashMap::new(),
             virtual_cell_count: 0,
-            current_virtual_cell: Target::wire(0),
+            current_virtual_cell: Target::wire(0, 0),
             current_virtual_cell_count: 0,
         }
     }
@@ -67,10 +67,10 @@ impl SparseMerkleTreeI {
         let leaf_hash = self.hash_leaf(key, value);
         let path = self.generate_merkle_path(key)?;
         let _value_field = self.hash_to_field(&leaf_hash);
-        let value_cell = self.circuit_builder.add_virtual_public_input();
+        let _value_cell = self.circuit_builder.add_virtual_public_input();
         let _key_field = self.hash_to_field(&self.hash_leaf(key, &[]));
-        let key_cell = self.circuit_builder.add_virtual_public_input();
-        self.add_path_constraints(&path, key_cell, value_cell)?;
+        let _key_cell = self.circuit_builder.add_virtual_public_input();
+        self.add_path_constraints(&path, _key_cell, _value_cell)?;
         self.root_hash = self.calculate_new_root(&path, &leaf_hash)?;
         Ok(())
     }
@@ -83,16 +83,16 @@ impl SparseMerkleTreeI {
     fn add_path_constraints(
         &mut self,
         path: &[([u8; 32], bool)],
-        key_cell: Target,
-        value_cell: Target,
+        _key_cell: Target,
+        _value_cell: Target,
     ) -> Result<(), SystemError> {
         let mut current = self.circuit_builder.add_virtual_target();
 
         for (sibling, is_left) in path {
-            let sibling_field = self.hash_to_field(sibling);
+            let _sibling_field = self.hash_to_field(sibling);
             let sibling_cell = self.circuit_builder.add_virtual_public_input();
 
-            let cells = if *is_left {
+            let _cells = if *is_left {
                 [current, sibling_cell]
             } else {
                 [sibling_cell, current]
@@ -116,20 +116,20 @@ impl SparseMerkleTreeI {
         for i in 0..self.height {
             let bit = self.get_bit(key, i);
             let node = self.nodes.get(&current).ok_or_else(|| SystemError {
-                error_type: "NodeNotFound".to_string(),
+                error_type: SystemErrorType::MerkleTreeError,
                 message: "Node not found in path".to_string(),
             })?;
 
             if bit {
                 let right_hash = node.right.ok_or_else(|| SystemError {
-                    error_type: "InvalidPath".to_string(),
+                    error_type: SystemErrorType::MerkleTreeError,
                     message: "Invalid path".to_string(),
                 })?;
                 path.push((right_hash, true));
                 current = right_hash;
             } else {
                 let left_hash = node.left.ok_or_else(|| SystemError {
-                    error_type: "InvalidPath".to_string(),
+                    error_type: SystemErrorType::MerkleTreeError,
                     message: "Invalid path".to_string(),
                 })?;
                 path.push((left_hash, false));
@@ -201,7 +201,7 @@ impl SparseMerkleTreeI {
         boc.add_cell(Cell::new(
             self.root_hash.to_vec(),
             vec![],
-            CellType::Ordinary, // Changed from Root
+            CellType::Ordinary,
             self.root_hash,
             None,
         ));
@@ -217,7 +217,7 @@ impl SparseMerkleTreeI {
             boc.add_cell(Cell::new(
                 node_data,
                 vec![],
-                CellType::Ordinary, // Changed from Internal
+                CellType::Ordinary,
                 *hash,
                 None,
             ));

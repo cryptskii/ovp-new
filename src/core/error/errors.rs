@@ -45,6 +45,10 @@ pub enum Error {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SystemErrorType {
     InvalidTransaction,
+    InvalidSignature,
+    InvalidPublicKey,
+    InvalidAddress,
+    InvalidHash,
     InvalidNonce,
     InvalidSequence,
     InvalidAmount,
@@ -59,6 +63,10 @@ impl fmt::Display for SystemErrorType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::InvalidTransaction => write!(f, "Invalid transaction"),
+            Self::InvalidSignature => write!(f, "Invalid signature"),
+            Self::InvalidPublicKey => write!(f, "Invalid public key"),
+            Self::InvalidAddress => write!(f, "Invalid address"),
+            Self::InvalidHash => write!(f, "Invalid hash"),
             Self::InvalidNonce => write!(f, "Invalid nonce"),
             Self::InvalidSequence => write!(f, "Invalid sequence"),
             Self::InvalidAmount => write!(f, "Invalid amount"),
