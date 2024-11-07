@@ -57,6 +57,7 @@ pub enum SystemErrorType {
     BatteryError,
     NoRootCell,
     InvalidOperation,
+    NotFound,
 }
 
 impl fmt::Display for SystemErrorType {
@@ -75,6 +76,7 @@ impl fmt::Display for SystemErrorType {
             Self::BatteryError => write!(f, "Battery error"),
             Self::NoRootCell => write!(f, "No root cell"),
             Self::InvalidOperation => write!(f, "Invalid operation"),
+            Self::NotFound => write!(f, "Not found"),
         }
     }
 }

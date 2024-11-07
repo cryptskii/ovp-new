@@ -116,20 +116,20 @@ impl SparseMerkleTreeI {
         for i in 0..self.height {
             let bit = self.get_bit(key, i);
             let node = self.nodes.get(&current).ok_or_else(|| SystemError {
-                error_type: SystemErrorType::MerkleTreeError,
+                error_type: SystemErrorType::NotFound,
                 message: "Node not found in path".to_string(),
             })?;
 
             if bit {
                 let right_hash = node.right.ok_or_else(|| SystemError {
-                    error_type: SystemErrorType::MerkleTreeError,
+                    error_type: SystemErrorType::NotFound,
                     message: "Invalid path".to_string(),
                 })?;
                 path.push((right_hash, true));
                 current = right_hash;
             } else {
                 let left_hash = node.left.ok_or_else(|| SystemError {
-                    error_type: SystemErrorType::MerkleTreeError,
+                    error_type: SystemErrorType::NotFound,
                     message: "Invalid path".to_string(),
                 })?;
                 path.push((left_hash, false));
