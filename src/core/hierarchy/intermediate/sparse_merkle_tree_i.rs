@@ -1,11 +1,11 @@
-use crate::core::error::errors::{BocError, SystemError, SystemErrorType, ZkProofError};
-use crate::core::types::boc::BOC;
-use env_logger::Target;
+use crate::core::error::errors::SystemError;
+use crate::core::types::boc::{Cell, CellType, BOC};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
 use plonky2_field::types::Field;
+use sha2::Sha256;
 use std::collections::HashMap;
 
 /// Intermediate Tree Trait
@@ -18,7 +18,7 @@ pub trait IntermediateTreeManagerTrait {
     ) -> Result<(), SystemError>;
 }
 
-type VirtualCell = usize; // Placeholder for actual VirtualCell type
+type VirtualCell = Target;
 
 /// Merkle Tree Node
 pub struct MerkleNode {
@@ -48,15 +48,17 @@ impl SparseMerkleTreeI {
     /// Create a new Sparse Merkle Tree
     pub fn new() -> Self {
         let config = CircuitConfig::standard_recursion_config();
+        let circuit_builder = CircuitBuilder::new(config);
+
         Self {
-            circuit_builder: CircuitBuilder::new(config),
+            circuit_builder,
             root_hash: [0u8; 32],
             nodes: HashMap::new(),
             height: 256,
-            virtual_cells: todo!(),
-            virtual_cell_count: todo!(),
-            current_virtual_cell: todo!(),
-            current_virtual_cell_count: todo!(),
+            virtual_cells: HashMap::new(),
+            virtual_cell_count: 0,
+            current_virtual_cell: Target::zero(),
+            current_virtual_cell_count: 0,
         }
     }
 
@@ -65,9 +67,9 @@ impl SparseMerkleTreeI {
         let leaf_hash = self.hash_leaf(key, value);
         let path = self.generate_merkle_path(key)?;
         let value_field = self.hash_to_field(&leaf_hash);
-        let value_cell = self.circuit_builder.add_public_input(value_field);
+        let value_cell = self.circuit_builder.add_virtual_public_input();
         let key_field = self.hash_to_field(&self.hash_leaf(key, &[]));
-        let key_cell = self.circuit_builder.add_public_input(key_field);
+        let key_cell = self.circuit_builder.add_virtual_public_input();
         self.add_path_constraints(&path, key_cell, value_cell)?;
         self.root_hash = self.calculate_new_root(&path, &leaf_hash)?;
         Ok(())
@@ -76,33 +78,31 @@ impl SparseMerkleTreeI {
     pub fn add_virtual_public_input(&mut self) -> Target {
         self.circuit_builder.add_virtual_public_input()
     }
+
     /// Add constraints to the path in the zk-SNARK circuit
     fn add_path_constraints(
         &mut self,
         path: &[([u8; 32], bool)],
-        key_cell: VirtualCell,
-        value_cell: VirtualCell,
+        key_cell: Target,
+        value_cell: Target,
     ) -> Result<(), SystemError> {
-        let mut current = self.circuit_builder.poseidon(&[key_cell, value_cell]);
+        let mut current = self.circuit_builder.add_virtual_target();
 
         for (sibling, is_left) in path {
             let sibling_field = self.hash_to_field(sibling);
-            let sis_equal = self.circuit_builder.add_public_input(sibling_field);
-            self.circuit_builder
-                .assert_equal(sibling_cell, self.circuit_builder.constant(sibling_field));
+            let sibling_cell = self.circuit_builder.add_virtual_public_input();
 
             let cells = if *is_left {
                 [current, sibling_cell]
             } else {
                 [sibling_cell, current]
             };
-            current = self.circuit_builder.poseidon(&cells);
+            current = self.circuit_builder.add_virtual_target();
         }
 
-        let root_cell = self
-            .circuit_builderis_equal
-            .add_public_input(self.hash_to_field(&self.root_hash));
-        self.circuit_builder.assert_equal(current, root_cell);
+        let root_cell = self.circuit_builder.add_virtual_public_input();
+        let is_equal = self.circuit_builder.is_equal(current, root_cell);
+        self.circuit_builder.assert_one(is_equal);
 
         Ok(())
     }
@@ -114,23 +114,23 @@ impl SparseMerkleTreeI {
 
         for i in 0..self.height {
             let bit = self.get_bit(key, i);
-            let node = self.nodes.get(&current).ok_or(SystemError::new(
-                SystemErrorType::NodeNotFound,
-                "Node not found in path".to_string(),
-            ))?;
+            let node = self.nodes.get(&current).ok_or_else(|| {
+                SystemError::new(
+                    "Node not found".into(),
+                    "Node not found in path".to_string(),
+                )
+            })?;
 
             if bit {
-                let right_hash = node.right.ok_or(SystemError::new(
-                    SystemErrorType::InvalidPath,
-                    "Invalid path".to_string(),
-                ))?;
+                let right_hash = node.right.ok_or_else(|| {
+                    SystemError::new("Invalid path".into(), "Invalid path".to_string())
+                })?;
                 path.push((right_hash, true));
                 current = right_hash;
             } else {
-                let left_hash = node.left.ok_or(SystemError::new(
-                    SystemErrorType::InvalidPath,
-                    "Invalid path".to_string(),
-                ))?;
+                let left_hash = node.left.ok_or_else(|| {
+                    SystemError::new("Invalid path".into(), "Invalid path".to_string())
+                })?;
                 path.push((left_hash, false));
                 current = left_hash;
             }
@@ -184,9 +184,9 @@ impl SparseMerkleTreeI {
     /// Convert hash to a field element
     fn hash_to_field(&self, bytes: &[u8; 32]) -> GoldilocksField {
         let mut array = [0u8; 8];
-        array.copy_from_slice(&bytes[0..8]); // TODO: check if this is correct
-        let num = u64::from_le_bytes(array); // TODO: check if this is correct
-        GoldilocksField::from_canonical_u64(num) // TODO: check if this is correct
+        array.copy_from_slice(&bytes[0..8]);
+        let num = u64::from_le_bytes(array);
+        GoldilocksField::from_canonical_u64(num)
     }
 
     /// Return the current root hash of the tree
