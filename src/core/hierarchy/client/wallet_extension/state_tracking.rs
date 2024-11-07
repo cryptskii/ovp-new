@@ -2,7 +2,7 @@
 
 use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
 use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::{
-    PrivateChannelState, StateTransition, WalletRoot,
+    PrivateChannelState, StateTransition,
 };
 use crate::core::types::boc::{Cell, BOC};
 use crate::core::zkps::proof::ZkProof;
@@ -281,14 +281,14 @@ impl WalletBalanceTracker {
 
 /// Tracks root state transitions and aggregation
 #[derive(Clone, Debug)]
-pub struct RootStateTracker {
+pub struct RootStateTracker<WalletRoot> {
     pub root_history: Vec<WalletRoot>,
     current_epoch: u64,
     aggregation_threshold: u64,
     pending_roots: Vec<([u8; 32], u64)>,
 }
 
-impl RootStateTracker {
+impl<WalletRoot> RootStateTracker<WalletRoot> {
     pub fn new(aggregation_threshold: u64) -> Self {
         Self {
             root_history: Vec::new(),
@@ -317,9 +317,9 @@ impl RootStateTracker {
 
             // Create wallet root
             let wallet_root = WalletRoot {
-                root_id: aggregated_root,
-                wallet_merkle_proofs: merkle_proofs,
-                aggregated_balance: balance,
+                root: aggregated_root,
+                merkle_proofs,
+                balance,
             };
 
             // Add to history
@@ -383,7 +383,6 @@ impl RootStateTracker {
         Ok(aggregated)
     }
 }
-
 // Helper structs
 #[derive(Clone)]
 struct VerificationContext {
@@ -490,7 +489,7 @@ mod tests {
 
     #[test]
     fn test_root_tracking() {
-        let mut tracker = RootStateTracker::new(2); // Aggregate after 2 roots
+        let mut tracker: RootStateTracker<[u8; 32]> = RootStateTracker::new(2); // Aggregate after 2 roots
 
         let root1 = [1u8; 32];
         let root2 = [2u8; 32];

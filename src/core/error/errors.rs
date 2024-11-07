@@ -4,8 +4,6 @@ use std::io;
 #[derive(Debug)]
 pub enum Error {
     IoError(io::Error),
-    SerializationError(String),
-    DeserializationError(String),
     InvalidProof,
     UnknownContract,
     InvalidTransaction,
@@ -25,7 +23,6 @@ pub enum Error {
     InvalidProofDataSignature,
     InvalidProofDataPublicKey,
     InvalidProofDataHash,
-    ChannelNotFound,
     StorageError(String),
     StakeError(String),
     NetworkError(String),
@@ -35,6 +32,14 @@ pub enum Error {
     ZkProofError(ZkProofError),
     BocError(BocError),
     SystemError(SystemError),
+    CustomError(String),
+    SerializationError(String),
+    DeserializationError(String),
+    LockError(String),
+    ChannelNotFound(String),
+    StateNotFound(String),
+    InvalidBOC(String),
+    ArithmeticError(String),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,8 +204,6 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Error::IoError(err) => write!(f, "IO error: {}", err),
-            Error::SerializationError(err) => write!(f, "Serialization error: {}", err),
-            Error::DeserializationError(err) => write!(f, "Deserialization error: {}", err),
             Error::InvalidProof => write!(f, "Invalid proof"),
             Error::UnknownContract => write!(f, "Unknown contract"),
             Error::InvalidTransaction => write!(f, "Invalid transaction"),
@@ -220,7 +223,14 @@ impl fmt::Display for Error {
             Error::InvalidProofDataSignature => write!(f, "Invalid proof data signature"),
             Error::InvalidProofDataPublicKey => write!(f, "Invalid proof data public key"),
             Error::InvalidProofDataHash => write!(f, "Invalid proof data hash"),
-            Error::ChannelNotFound => write!(f, "Channel not found"),
+            Error::CustomError(msg) => write!(f, "Custom Error: {}", msg),
+            Error::SerializationError(msg) => write!(f, "Serialization Error: {}", msg),
+            Error::DeserializationError(msg) => write!(f, "Deserialization Error: {}", msg),
+            Error::LockError(msg) => write!(f, "Lock Error: {}", msg),
+            Error::ChannelNotFound(msg) => write!(f, "Channel Not Found: {}", msg),
+            Error::StateNotFound(msg) => write!(f, "State Not Found: {}", msg),
+            Error::InvalidBOC(msg) => write!(f, "Invalid BOC: {}", msg),
+            Error::ArithmeticError(msg) => write!(f, "Arithmetic Error: {}", msg),
             Error::StorageError(err) => write!(f, "Storage error: {}", err),
             Error::StakeError(err) => write!(f, "Stake error: {}", err),
             Error::NetworkError(err) => write!(f, "Network error: {}", err),
