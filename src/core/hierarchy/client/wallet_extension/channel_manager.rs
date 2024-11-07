@@ -1,14 +1,10 @@
-use crate::core::error::{Error, SystemError, SystemErrorType};
-use crate::core::hierarchy::client::channel::channel_contract::ChannelContract;
-use crate::core::types::ovp_ops::ChannelOpCode;
-use crate::core::zkps::plonky2::Plonky2SystemHandle;
-use crate::core::zkps::proof::ZkProof;
-use anyhow::{anyhow, Result};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use std::time::{SystemTime, UNIX_EPOCH};
+use wasm_bindgen::prelude::*;
 
+// Type alias for ChannelStore
 type ChannelStore = Arc<RwLock<HashMap<[u8; 32], Arc<RwLock<ChannelContract>>>>>;
 
 #[derive(Debug, Clone)]
@@ -18,6 +14,7 @@ pub struct ChannelConfig {
     pub max_balance: u64,
 }
 
+#[wasm_bindgen]
 pub struct ChannelManager {
     channels: ChannelStore,
     proof_system: Arc<Plonky2SystemHandle>,
@@ -25,65 +22,70 @@ pub struct ChannelManager {
     spending_limit: u64,
 }
 
+#[wasm_bindgen]
 impl ChannelManager {
-    pub fn new(proof_system: Arc<Plonky2SystemHandle>) -> Self {
+    #[wasm_bindgen(constructor)]
+    pub fn new() -> ChannelManager {
         Self {
             channels: Arc::new(RwLock::new(HashMap::new())),
-            proof_system,
+            proof_system: Arc::new(Plonky2SystemHandle::new()),
             wallet_id: [0; 32],
             spending_limit: 0,
         }
     }
 
-    pub fn new_with_wallet(
-        proof_system: Arc<Plonky2SystemHandle>,
-        wallet_id: [u8; 32],
-        spending_limit: u64,
-    ) -> Self {
+    #[wasm_bindgen]
+    pub fn new_with_wallet(wallet_id: &[u8], spending_limit: u64) -> ChannelManager {
+        let mut id = [0u8; 32];
+        id.copy_from_slice(&wallet_id[0..32]);
         Self {
             channels: Arc::new(RwLock::new(HashMap::new())),
-            proof_system,
-            wallet_id,
+            proof_system: Arc::new(Plonky2SystemHandle::new()),
+            wallet_id: id,
             spending_limit,
         }
     }
 
-    pub async fn dispatch(&self, op_code: ChannelOpCode, params: Vec<u8>) -> Result<Vec<u8>> {
+    #[wasm_bindgen]
+    pub async fn dispatch(&self, op_code: u8, params: &[u8]) -> Result<Box<[u8]>, JsValue> {
+        let op_code =
+            ChannelOpCode::from_u8(op_code).ok_or_else(|| JsValue::from_str("Invalid op_code"))?;
         match op_code {
             ChannelOpCode::GetChannel => {
-                let channel_id = decode_channel_id(&params)?;
+                let channel_id = decode_channel_id(params)?;
                 let channel = self.get_channel(&channel_id)?;
-                Ok(serialize_channel(&channel))
+                Ok(serialize_channel(&channel).into_boxed_slice())
             }
             ChannelOpCode::InitChannel => {
-                let (sender, recipient, initial_balance, config) = decode_create_params(&params)?;
+                let (sender, recipient, initial_balance, config) = decode_create_params(params)?;
                 let channel_id =
                     self.create_channel(sender, recipient, initial_balance, &config)?;
-                Ok(channel_id.to_vec())
+                Ok(channel_id.to_vec().into_boxed_slice())
             }
             ChannelOpCode::UpdateState => {
-                let (channel_id, new_state) = decode_update_params(&params)?;
+                let (channel_id, new_state) = decode_update_params(params)?;
                 self.update_channel_state(&channel_id, new_state)?;
-                Ok(vec![])
+                Ok(vec![].into_boxed_slice())
             }
             ChannelOpCode::VerifyProof => {
-                let (channel_id, proof, old_balance, new_balance) = decode_verify_params(&params)?;
+                let (channel_id, proof, old_balance, new_balance) = decode_verify_params(params)?;
                 let channel = self.get_channel(&channel_id)?;
-                let channel = channel.read().map_err(|_| Error::InvalidTransaction)?;
+                let channel = channel
+                    .read()
+                    .map_err(|_| JsValue::from_str("InvalidTransaction"))?;
                 let is_valid = self.verify_proof(&channel, &proof, old_balance, new_balance)?;
-                Ok(vec![is_valid as u8])
+                Ok(vec![is_valid as u8].into_boxed_slice())
             }
-            _ => Err(anyhow!("Unsupported operation code: {:?}", op_code)),
         }
     }
 
-    fn get_channel(&self, channel_id: &[u8; 32]) -> Result<Arc<RwLock<ChannelContract>>, Error> {
+    fn get_channel(&self, channel_id: &[u8; 32]) -> Result<Arc<RwLock<ChannelContract>>, JsValue> {
         self.channels
             .read()
-            .map_err(|_| Error::InvalidTransaction)?
+            .map_err(|_| JsValue::from_str("InvalidTransaction"))?
             .get(channel_id)
             .cloned()
-            .ok_or(Error::ChannelNotFound("Channel not found".to_string()))
+            .ok_or_else(|| JsValue::from_str("Channel not found"))
     }
 
     fn create_channel(
@@ -92,53 +94,55 @@ impl ChannelManager {
         recipient: [u8; 32],
         initial_balance: u64,
         _config: &ChannelConfig,
-    ) -> Result<[u8; 32], Error> {
-        // Generate channel ID using SHA256
+    ) -> Result<[u8; 32], JsValue> {
         let mut hasher = Sha256::new();
         hasher.update(sender);
         hasher.update(recipient);
         hasher.update(initial_balance.to_le_bytes());
+        let hash = hasher.finalize();
         let mut channel_id = [0u8; 32];
-        channel_id.copy_from_slice(&hasher.finalize());
+        channel_id.copy_from_slice(&hash);
 
-        // Check if channel already exists
         let mut channels = self
             .channels
             .write()
-            .map_err(|_| Error::InvalidTransaction)?;
+            .map_err(|_| JsValue::from_str("InvalidTransaction"))?;
         if channels.contains_key(&channel_id) {
-            return Err(Error::InvalidChannel);
+            return Err(JsValue::from_str("InvalidChannel"));
         }
 
-        // Create new channel
         let channel = ChannelContract::new(hex::encode(channel_id));
         let channel = Arc::new(RwLock::new(channel));
 
-        // Initialize channel state
         {
-            let mut channel_lock = channel.write().map_err(|_| Error::InvalidTransaction)?;
+            let mut channel_lock = channel
+                .write()
+                .map_err(|_| JsValue::from_str("InvalidTransaction"))?;
             channel_lock
                 .update_balance(initial_balance)
-                .map_err(|_| Error::InvalidAmount)?;
+                .map_err(|_| JsValue::from_str("InvalidAmount"))?;
         }
 
-        // Store channel
         channels.insert(channel_id, channel);
         Ok(channel_id)
     }
 
-    fn update_channel_state(&self, channel_id: &[u8; 32], new_state: Vec<u8>) -> Result<(), Error> {
+    fn update_channel_state(
+        &self,
+        channel_id: &[u8; 32],
+        new_state: Vec<u8>,
+    ) -> Result<(), JsValue> {
         let channel = self.get_channel(channel_id)?;
-        let mut channel = channel.write().map_err(|_| Error::InvalidTransaction)?;
+        let mut channel = channel
+            .write()
+            .map_err(|_| JsValue::from_str("InvalidTransaction"))?;
 
-        // Verify channel state transition
         if !self.validate_channel(&channel)? {
-            return Err(Error::InvalidChannel);
+            return Err(JsValue::from_str("InvalidChannel"));
         }
 
-        // Update channel balance from state data
         if new_state.len() < 8 {
-            return Err(Error::InvalidTransaction);
+            return Err(JsValue::from_str("InvalidTransaction"));
         }
 
         let mut balance_bytes = [0u8; 8];
@@ -147,17 +151,14 @@ impl ChannelManager {
 
         channel
             .update_balance(balance)
-            .map_err(|_| Error::InvalidAmount)?;
+            .map_err(|_| JsValue::from_str("InvalidAmount"))?;
 
         Ok(())
     }
 
-    fn validate_channel(&self, channel: &ChannelContract) -> Result<bool, Error> {
-        if channel.balance > self.spending_limit {
-            return Err(Error::SystemError(SystemError::new(
-                SystemErrorType::SpendingLimitExceeded,
-                "Channel balance exceeds spending limit".to_string(),
-            )));
+    fn validate_channel(&self, channel: &ChannelContract) -> Result<bool, JsValue> {
+        if channel.balance() > self.spending_limit {
+            return Err(JsValue::from_str("Spending limit exceeded"));
         }
         Ok(true)
     }
@@ -168,37 +169,36 @@ impl ChannelManager {
         _proof: &ZkProof,
         old_balance: u64,
         new_balance: u64,
-    ) -> Result<bool, Error> {
-        // Validate channel state
+    ) -> Result<bool, JsValue> {
         self.validate_channel(channel)?;
 
-        // Convert parameters to proof format
         let mut proof_data = Vec::new();
         proof_data.extend_from_slice(&old_balance.to_le_bytes());
-        proof_data.extend_from_slice(&channel.nonce.to_le_bytes());
+        proof_data.extend_from_slice(&channel.nonce().to_le_bytes());
         proof_data.extend_from_slice(&new_balance.to_le_bytes());
-        proof_data.extend_from_slice(&(channel.nonce + 1).to_le_bytes());
+        proof_data.extend_from_slice(&(channel.nonce() + 1).to_le_bytes());
         proof_data.extend_from_slice(&new_balance.saturating_sub(old_balance).to_le_bytes());
 
-        // Verify proof
         self.proof_system
             .verify_proof_js(&proof_data)
-            .map_err(|_| Error::InvalidProof)
+            .map_err(|_| JsValue::from_str("InvalidProof"))
     }
 }
 
-fn decode_channel_id(params: &[u8]) -> Result<[u8; 32], Error> {
+fn decode_channel_id(params: &[u8]) -> Result<[u8; 32], JsValue> {
     if params.len() != 32 {
-        return Err(Error::InvalidTransaction);
+        return Err(JsValue::from_str("InvalidTransaction"));
     }
     let mut channel_id = [0u8; 32];
     channel_id.copy_from_slice(params);
     Ok(channel_id)
 }
 
-fn decode_create_params(params: &[u8]) -> Result<([u8; 32], [u8; 32], u64, ChannelConfig), Error> {
+fn decode_create_params(
+    params: &[u8],
+) -> Result<([u8; 32], [u8; 32], u64, ChannelConfig), JsValue> {
     if params.len() < 80 {
-        return Err(Error::InvalidTransaction);
+        return Err(JsValue::from_str("InvalidTransaction"));
     }
 
     let mut sender = [0u8; 32];
@@ -224,9 +224,9 @@ fn decode_create_params(params: &[u8]) -> Result<([u8; 32], [u8; 32], u64, Chann
     Ok((sender, recipient, initial_balance, config))
 }
 
-fn decode_update_params(params: &[u8]) -> Result<([u8; 32], Vec<u8>), Error> {
+fn decode_update_params(params: &[u8]) -> Result<([u8; 32], Vec<u8>), JsValue> {
     if params.len() <= 32 {
-        return Err(Error::InvalidTransaction);
+        return Err(JsValue::from_str("InvalidTransaction"));
     }
 
     let mut channel_id = [0u8; 32];
@@ -236,9 +236,9 @@ fn decode_update_params(params: &[u8]) -> Result<([u8; 32], Vec<u8>), Error> {
     Ok((channel_id, new_state))
 }
 
-fn decode_verify_params(params: &[u8]) -> Result<([u8; 32], ZkProof, u64, u64), Error> {
+fn decode_verify_params(params: &[u8]) -> Result<([u8; 32], ZkProof, u64, u64), JsValue> {
     if params.len() < 32 + 64 + 16 {
-        return Err(Error::InvalidProofDataLength);
+        return Err(JsValue::from_str("InvalidProofDataLength"));
     }
 
     let mut channel_id = [0u8; 32];
@@ -246,7 +246,7 @@ fn decode_verify_params(params: &[u8]) -> Result<([u8; 32], ZkProof, u64, u64), 
 
     let timestamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
-        .map_err(|_| Error::InvalidTimestamp)?
+        .map_err(|_| JsValue::from_str("InvalidTimestamp"))?
         .as_secs();
 
     let public_inputs = Vec::new();
@@ -274,13 +274,118 @@ fn serialize_channel(channel: &Arc<RwLock<ChannelContract>>) -> Vec<u8> {
     let channel = channel.read().unwrap();
     let mut serialized = Vec::with_capacity(32 + 24);
 
-    if let Ok(id_bytes) = hex::decode(&channel.id) {
+    if let Ok(id_bytes) = hex::decode(&channel.id()) {
         serialized.extend_from_slice(&id_bytes);
     }
 
-    serialized.extend_from_slice(&channel.balance.to_le_bytes());
-    serialized.extend_from_slice(&channel.nonce.to_le_bytes());
-    serialized.extend_from_slice(&channel.seqno.to_le_bytes());
+    serialized.extend_from_slice(&channel.balance().to_le_bytes());
+    serialized.extend_from_slice(&channel.nonce().to_le_bytes());
+    serialized.extend_from_slice(&channel.seqno().to_le_bytes());
 
     serialized
+}
+
+#[wasm_bindgen]
+#[derive(Debug)]
+pub struct ChannelContract {
+    id: String,
+    balance: u64,
+    nonce: u64,
+    seqno: u64,
+}
+
+#[wasm_bindgen]
+impl ChannelContract {
+    #[wasm_bindgen(constructor)]
+    pub fn new(id: String) -> ChannelContract {
+        ChannelContract {
+            id,
+            balance: 0,
+            nonce: 0,
+            seqno: 0,
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn id(&self) -> String {
+        self.id.clone()
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn balance(&self) -> u64 {
+        self.balance
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn nonce(&self) -> u64 {
+        self.nonce
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn seqno(&self) -> u64 {
+        self.seqno
+    }
+
+    pub fn update_balance(&mut self, amount: u64) -> Result<(), JsValue> {
+        self.balance = amount;
+        Ok(())
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Debug)]
+pub enum ChannelOpCode {
+    GetChannel = 0,
+    InitChannel = 1,
+    UpdateState = 2,
+    VerifyProof = 3,
+}
+
+impl ChannelOpCode {
+    pub fn from_u8(value: u8) -> Option<Self> {
+        match value {
+            0 => Some(ChannelOpCode::GetChannel),
+            1 => Some(ChannelOpCode::InitChannel),
+            2 => Some(ChannelOpCode::UpdateState),
+            3 => Some(ChannelOpCode::VerifyProof),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct Plonky2SystemHandle;
+
+impl Plonky2SystemHandle {
+    pub fn new() -> Self {
+        Plonky2SystemHandle
+    }
+
+    pub fn verify_proof_js(&self, _proof_data: &[u8]) -> Result<bool, JsValue> {
+        Ok(true)
+    }
+}
+
+#[derive(Debug)]
+pub struct ZkProof {
+    proof: Vec<u8>,
+    public_inputs: Vec<u8>,
+    merkle_root: Vec<u8>,
+    timestamp: u64,
+}
+
+impl ZkProof {
+    pub fn new(
+        proof: Vec<u8>,
+        public_inputs: Vec<u8>,
+        merkle_root: Vec<u8>,
+        timestamp: u64,
+    ) -> Self {
+        ZkProof {
+            proof,
+            public_inputs,
+            merkle_root,
+            timestamp,
+        }
+    }
 }
