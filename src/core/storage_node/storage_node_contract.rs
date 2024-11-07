@@ -3,7 +3,6 @@ use crate::core::storage_node::battery::BatteryChargingSystem;
 use crate::core::types::boc::BOC;
 use crate::core::zkps::proof::ZkProof;
 use futures::lock::Mutex;
-use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::default::Default;
@@ -60,13 +59,12 @@ impl StorageNode {
     ) -> Result<Self, SystemError> {
         if initial_stake < 1000 {
             return Err(SystemError {
-                error_type: SystemErrorType::ValidationError,
+                error_type: SystemErrorType::InvalidArgument,
                 message: "Insufficient initial stake".to_string(),
             });
         }
 
-        let battery_charging_system =
-            BatteryChargingSystem::new(config.battery_config.clone(), initial_stake);
+        let battery_charging_system = BatteryChargingSystem::new(initial_stake);
 
         Ok(Self {
             node_id,
@@ -85,13 +83,13 @@ impl StorageNode {
             .charge_for_processing()
             .await
             .map_err(|e| SystemError {
-                error_type: SystemErrorType::ValidationError,
+                error_type: SystemErrorType::BatteryError,
                 message: e.to_string(),
             })?;
 
         if !self.verify_proof_internal(&proof, &boc)? {
             return Err(SystemError {
-                error_type: SystemErrorType::ValidationError,
+                error_type: SystemErrorType::InvalidProof,
                 message: "Invalid proof".to_string(),
             });
         }
@@ -145,7 +143,23 @@ impl StorageNode {
         hash
     }
 
-    fn verify_proof_internal(&self, proof: &ZkProof, _boc: &BOC) -> Result<bool, SystemError> {
-        Ok(true) // Implement actual verification logic
+    fn verify_proof_internal(&self, _proof: &ZkProof, _boc: &BOC) -> Result<bool, SystemError> {
+        Ok(true) // TODO: Implement actual verification logic
+    }
+}
+
+impl StorageNodeConfig {
+    pub fn new(
+        battery_config: BatteryConfig,
+        sync_config: SyncConfig,
+        epidemic_config: EpidemicProtocolConfig,
+        network_config: NetworkConfig,
+    ) -> Self {
+        Self {
+            battery_config,
+            sync_config,
+            epidemic_protocol_config: epidemic_config,
+            network_config,
+        }
     }
 }
