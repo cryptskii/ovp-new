@@ -1,8 +1,11 @@
 use crate::core::error::errors::{BocError, SystemError, SystemErrorType, ZkProofError};
 use crate::core::types::boc::BOC;
+use env_logger::Target;
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::iop::target::Target;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
+use plonky2_field::types::Field;
 use std::collections::HashMap;
 
 /// Intermediate Tree Trait
@@ -50,6 +53,10 @@ impl SparseMerkleTreeI {
             root_hash: [0u8; 32],
             nodes: HashMap::new(),
             height: 256,
+            virtual_cells: todo!(),
+            virtual_cell_count: todo!(),
+            current_virtual_cell: todo!(),
+            current_virtual_cell_count: todo!(),
         }
     }
 
@@ -80,7 +87,7 @@ impl SparseMerkleTreeI {
 
         for (sibling, is_left) in path {
             let sibling_field = self.hash_to_field(sibling);
-            let sibling_cell = self.circuit_builder.add_public_input(sibling_field);
+            let sis_equal = self.circuit_builder.add_public_input(sibling_field);
             self.circuit_builder
                 .assert_equal(sibling_cell, self.circuit_builder.constant(sibling_field));
 
@@ -93,7 +100,7 @@ impl SparseMerkleTreeI {
         }
 
         let root_cell = self
-            .circuit_builder
+            .circuit_builderis_equal
             .add_public_input(self.hash_to_field(&self.root_hash));
         self.circuit_builder.assert_equal(current, root_cell);
 
@@ -177,9 +184,9 @@ impl SparseMerkleTreeI {
     /// Convert hash to a field element
     fn hash_to_field(&self, bytes: &[u8; 32]) -> GoldilocksField {
         let mut array = [0u8; 8];
-        array.copy_from_slice(&bytes[0..8]);
-        let num = u64::from_le_bytes(array);
-        GoldilocksField::from_canonical_u64(num)
+        array.copy_from_slice(&bytes[0..8]); // TODO: check if this is correct
+        let num = u64::from_le_bytes(array); // TODO: check if this is correct
+        GoldilocksField::from_canonical_u64(num) // TODO: check if this is correct
     }
 
     /// Return the current root hash of the tree
