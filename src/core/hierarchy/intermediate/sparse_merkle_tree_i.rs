@@ -1,4 +1,5 @@
 use crate::core::error::errors::{BocError, SystemError, SystemErrorType, ZkProofError};
+use crate::core::types::boc::BOC;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
@@ -65,6 +66,9 @@ impl SparseMerkleTreeI {
         Ok(())
     }
 
+    pub fn add_virtual_public_input(&mut self) -> Target {
+        self.circuit_builder.add_virtual_public_input()
+    }
     /// Add constraints to the path in the zk-SNARK circuit
     fn add_path_constraints(
         &mut self,

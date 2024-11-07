@@ -2,7 +2,6 @@ use crate::core::error::errors::Error;
 use crate::core::hierarchy::client::channel::channel_contract::ChannelContract;
 use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
 use crate::core::hierarchy::client::wallet_extension::wallet_extension_contract::ByteArray32;
-use crate::core::storage_node::storage_node_contract::StorageNode;
 use crate::core::types::boc::BOC;
 use crate::core::types::WalletExtensionStateChangeOp;
 use crate::core::zkps::plonky2::Plonky2SystemHandle;
