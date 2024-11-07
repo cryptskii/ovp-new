@@ -1,34 +1,14 @@
+use crate::core::error::errors::{BocError, SystemError, SystemErrorType};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::fmt;
-use std::io;
 
-// Error types
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SystemErrorType {
-    InvalidTransaction,
-    InvalidNonce,
-    InvalidSequence,
-    InvalidAmount,
-    InsufficientBalance,
-    SpendingLimitExceeded,
-    NoRootCell,
-    InvalidOperation,
-}
-
-impl fmt::Display for SystemErrorType {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::InvalidTransaction => write!(f, "Invalid transaction"),
-            Self::InvalidNonce => write!(f, "Invalid nonce"),
-            Self::InvalidSequence => write!(f, "Invalid sequence"),
-            Self::InvalidAmount => write!(f, "Invalid amount"),
-            Self::InsufficientBalance => write!(f, "Insufficient balance"),
-            Self::SpendingLimitExceeded => write!(f, "Spending limit exceeded"),
-            Self::NoRootCell => write!(f, "No root cell"),
-            Self::InvalidOperation => write!(f, "Invalid operation"),
-        }
-    }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Cell {
+    pub data: Vec<u8>,
+    pub references: Vec<usize>,
+    pub cell_type: CellType,
+    pub merkle_hash: [u8; 32],
+    pub proof: Option<Vec<u8>>, // Added field for proof data
 }
 
 // root_cell struct
@@ -112,251 +92,6 @@ pub fn root_cell_hash(data: &[u8]) -> [u8; 32] {
     let mut hash = [0u8; 32];
     hash.copy_from_slice(&hasher.finalize());
     hash
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Cell {
-    pub data: Vec<u8>,
-    pub references: Vec<usize>,
-    pub cell_type: CellType,
-    pub merkle_hash: [u8; 32],
-    pub proof: Option<Vec<u8>>, // Added field for proof data
-}
-
-#[derive(Debug, Clone)]
-pub struct SystemError {
-    pub error_type: SystemErrorType,
-    pub message: String,
-}
-
-impl SystemError {
-    pub fn new(error_type: SystemErrorType, message: String) -> Self {
-        Self {
-            error_type,
-            message,
-        }
-    }
-
-    pub fn error_type(&self) -> SystemErrorType {
-        self.error_type
-    }
-
-    pub fn message(&self) -> &str {
-        &self.message
-    }
-}
-
-impl fmt::Display for SystemError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}: {}", self.error_type, self.message)
-    }
-}
-
-impl std::error::Error for SystemError {}
-
-#[derive(Debug)]
-pub enum CellError {
-    DataTooLarge,
-    TooManyReferences,
-    InvalidData,
-    IoError(io::Error),
-}
-
-impl fmt::Display for CellError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            CellError::DataTooLarge => write!(f, "Cell data is too large"),
-            CellError::TooManyReferences => write!(f, "Too many references in cell"),
-            CellError::InvalidData => write!(f, "Invalid cell data"),
-            CellError::IoError(err) => write!(f, "IO error: {}", err),
-        }
-    }
-}
-
-impl std::error::Error for CellError {}
-
-impl From<io::Error> for CellError {
-    fn from(err: io::Error) -> Self {
-        CellError::IoError(err)
-    }
-}
-
-#[derive(Debug)]
-pub enum ZkProofError {
-    InvalidProof,
-    InvalidProofData,
-    InvalidProofDataLength,
-    InvalidProofDataFormat,
-    InvalidProofDataSignature,
-    InvalidProofDataPublicKey,
-    InvalidProofDataHash,
-}
-
-impl fmt::Display for ZkProofError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            ZkProofError::InvalidProof => write!(f, "Invalid proof"),
-            ZkProofError::InvalidProofData => write!(f, "Invalid proof data"),
-            ZkProofError::InvalidProofDataLength => write!(f, "Invalid proof data length"),
-            ZkProofError::InvalidProofDataFormat => write!(f, "Invalid proof data format"),
-            ZkProofError::InvalidProofDataSignature => write!(f, "Invalid proof data signature"),
-            ZkProofError::InvalidProofDataPublicKey => write!(f, "Invalid proof data public key"),
-            ZkProofError::InvalidProofDataHash => write!(f, "Invalid proof data hash"),
-        }
-    }
-}
-
-impl std::error::Error for ZkProofError {}
-
-#[derive(Debug)]
-pub enum BocError {
-    TooManyCells,
-    NoRoots,
-    TotalSizeTooLarge,
-    CellDataTooLarge,
-    TooManyReferences,
-    InvalidReference { from: usize, to: usize },
-    InvalidRoot(usize),
-    InvalidMerkleProof,
-    InvalidPrunedBranch,
-    CycleDetected,
-    MaxDepthExceeded,
-}
-
-impl fmt::Display for BocError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            BocError::TooManyCells => write!(f, "Too many cells"),
-            BocError::NoRoots => write!(f, "No roots"),
-            BocError::TotalSizeTooLarge => write!(f, "Total size too large"),
-            BocError::CellDataTooLarge => write!(f, "Cell data too large"),
-            BocError::TooManyReferences => write!(f, "Too many references"),
-            BocError::InvalidReference { from, to } => {
-                write!(f, "Invalid reference from {} to {}", from, to)
-            }
-            BocError::InvalidRoot(index) => write!(f, "Invalid root at index {}", index),
-            BocError::InvalidMerkleProof => write!(f, "Invalid Merkle proof"),
-            BocError::InvalidPrunedBranch => write!(f, "Invalid pruned branch"),
-            BocError::CycleDetected => write!(f, "Cycle detected"),
-            BocError::MaxDepthExceeded => write!(f, "Max depth exceeded"),
-        }
-    }
-}
-
-impl std::error::Error for BocError {}
-
-#[derive(Debug)]
-pub enum Error {
-    IoError(io::Error),
-    SerializationError(String),
-    DeserializationError(String),
-    InvalidProof,
-    UnknownContract,
-    InvalidTransaction,
-    InvalidSignature,
-    InvalidPublicKey,
-    InvalidAddress,
-    InvalidAmount,
-    InvalidChannel,
-    InvalidNonce,
-    InvalidSequence,
-    InvalidTimestamp,
-    BatteryError,
-    WalletError(String),
-    InvalidProofData,
-    InvalidProofDataLength,
-    InvalidProofDataFormat,
-    InvalidProofDataSignature,
-    InvalidProofDataPublicKey,
-    InvalidProofDataHash,
-    ChannelNotFound,
-    StorageError(String),
-    StakeError(String),
-    NetworkError(String),
-    ChargingTooFrequent,
-    MaxChargingAttemptsExceeded,
-    CellError(CellError),
-    ZkProofError(ZkProofError),
-    BocError(BocError),
-    SystemError(SystemError),
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::IoError(err) => write!(f, "IO error: {}", err),
-            Error::SerializationError(err) => write!(f, "Serialization error: {}", err),
-            Error::DeserializationError(err) => write!(f, "Deserialization error: {}", err),
-            Error::InvalidProof => write!(f, "Invalid proof"),
-            Error::UnknownContract => write!(f, "Unknown contract"),
-            Error::InvalidTransaction => write!(f, "Invalid transaction"),
-            Error::InvalidSignature => write!(f, "Invalid signature"),
-            Error::InvalidPublicKey => write!(f, "Invalid public key"),
-            Error::InvalidAddress => write!(f, "Invalid address"),
-            Error::InvalidAmount => write!(f, "Invalid amount"),
-            Error::InvalidChannel => write!(f, "Invalid channel"),
-            Error::InvalidNonce => write!(f, "Invalid nonce"),
-            Error::InvalidSequence => write!(f, "Invalid sequence"),
-            Error::InvalidTimestamp => write!(f, "Invalid timestamp"),
-            Error::BatteryError => write!(f, "Battery error"),
-            Error::WalletError(err) => write!(f, "Wallet error: {}", err),
-            Error::InvalidProofData => write!(f, "Invalid proof data"),
-            Error::InvalidProofDataLength => write!(f, "Invalid proof data length"),
-            Error::InvalidProofDataFormat => write!(f, "Invalid proof data format"),
-            Error::InvalidProofDataSignature => write!(f, "Invalid proof data signature"),
-            Error::InvalidProofDataPublicKey => write!(f, "Invalid proof data public key"),
-            Error::InvalidProofDataHash => write!(f, "Invalid proof data hash"),
-            Error::ChannelNotFound => write!(f, "Channel not found"),
-            Error::StorageError(err) => write!(f, "Storage error: {}", err),
-            Error::StakeError(err) => write!(f, "Stake error: {}", err),
-            Error::NetworkError(err) => write!(f, "Network error: {}", err),
-            Error::ChargingTooFrequent => write!(f, "Charging too frequent"),
-            Error::MaxChargingAttemptsExceeded => write!(f, "Max charging attempts exceeded"),
-            Error::CellError(err) => write!(f, "Cell error: {}", err),
-            Error::ZkProofError(err) => write!(f, "ZK proof error: {}", err),
-            Error::BocError(err) => write!(f, "BOC error: {}", err),
-            Error::SystemError(err) => write!(f, "System error: {}", err),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
-
-// From implementations
-impl From<io::Error> for Error {
-    fn from(err: io::Error) -> Self {
-        Error::IoError(err)
-    }
-}
-
-impl From<serde_json::Error> for Error {
-    fn from(err: serde_json::Error) -> Self {
-        Error::SerializationError(err.to_string())
-    }
-}
-
-impl From<CellError> for Error {
-    fn from(err: CellError) -> Self {
-        Error::CellError(err)
-    }
-}
-
-impl From<ZkProofError> for Error {
-    fn from(err: ZkProofError) -> Self {
-        Error::ZkProofError(err)
-    }
-}
-
-impl From<BocError> for Error {
-    fn from(err: BocError) -> Self {
-        Error::BocError(err)
-    }
-}
-
-impl From<SystemError> for Error {
-    fn from(err: SystemError) -> Self {
-        Error::SystemError(err)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -554,13 +289,13 @@ impl BOC {
     }
 
     /// Serializes the `BOC` into a JSON byte vector.
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        serde_json::to_vec(self).map_err(|e| Error::SerializationError(e.to_string()))
+    pub fn serialize(&self) -> Result<Vec<u8>, BocError> {
+        serde_json::to_vec(self).map_err(|e| BocError::SerializationError(e.to_string()))
     }
-
-    /// Deserializes a `BOC` from a JSON byte slice.
-    pub fn deserialize(data: &[u8]) -> Result<Self, Error> {
-        serde_json::from_slice(data).map_err(|e| Error::DeserializationError(e.to_string()))
+    /// Deserializes a `BOC` from a JSON byte vector.
+    /// Returns an error if the byte vector is not valid JSON.
+    pub fn deserialize(data: &[u8]) -> Result<Self, BocError> {
+        serde_json::from_slice(data).map_err(|e| BocError::DeserializationError(e.to_string()))
     }
 }
 
@@ -722,28 +457,5 @@ mod tests {
             error.to_string(),
             "Invalid transaction: Transaction validation failed"
         );
-    }
-
-    #[test]
-    fn test_error_conversions() {
-        let io_err = io::Error::new(io::ErrorKind::NotFound, "file not found");
-        let error: Error = io_err.into();
-        assert!(matches!(error, Error::IoError(_)));
-
-        let system_err = SystemError::new(
-            SystemErrorType::InvalidNonce,
-            "Invalid nonce value".to_string(),
-        );
-        let error: Error = system_err.into();
-        assert!(matches!(error, Error::SystemError(_)));
-    }
-
-    #[test]
-    fn test_error_display() {
-        let error = Error::InvalidProof;
-        assert_eq!(error.to_string(), "Invalid proof");
-
-        let error = Error::WalletError("Balance too low".to_string());
-        assert_eq!(error.to_string(), "Wallet error: Balance too low");
     }
 }

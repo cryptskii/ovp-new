@@ -1,40 +1,39 @@
-use crate::core::error::errors::SystemError;
-use crate::core::storage_node::storage_node_contract::StorageNode;
-use crate::core::types::boc::{Cell, BOC};
-use crate::core::zkps::circuit_builder::{Column, VirtualCell, ZkCircuitBuilder};
-use crate::core::zkps::plonky2::Plonky2System;
-use crate::core::zkps::proof::ZkProof;
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
-use sha2::{Digest, Sha256};
-use std::collections::HashMap;
+
+type VirtualCell = usize; // Placeholder for actual VirtualCell type
 
 /// Intermediate Tree Trait
 pub trait IntermediateTreeManagerTrait {
     fn update_trees(
         &mut self,
         boc: &BOC,
-        intermediate_trees: &mut HashMap<[u8; 32], SparseMerkleTreeI<GoldilocksField, 2>>,
-        root_trees: &mut HashMap<[u8; 32], SparseMerkleTreeI<GoldilocksField, 2>>,
+        intermediate_trees: &mut HashMap<[u8; 32], SparseMerkleTreeI>,
+        root_trees: &mut HashMap<[u8; 32], SparseMerkleTreeI>,
     ) -> Result<(), SystemError>;
 }
 
+/// Merkle Tree Node
+pub struct MerkleNode {
+    pub left: Option<[u8; 32]>,
+    pub right: Option<[u8; 32]>,
+}
+
 /// Sparse Merkle Tree Implementation
-pub struct SparseMerkleTreeI<RootTree, IntermediateTree> {
-    circuit_builder: ZkCircuitBuilder<GoldilocksField, 2>,
-    plonky2_system: Plonky2System,
+pub struct SparseMerkleTreeI {
+    circuit_builder: CircuitBuilder<GoldilocksField, 2>,
     root_hash: [u8; 32],
-    nodes: HashMap<[u8; 32], StorageNode<RootTree, IntermediateTree>>,
+    nodes: HashMap<[u8; 32], MerkleNode>,
     height: usize,
 }
 
-impl<RootTree, IntermediateTree> SparseMerkleTreeI<RootTree, IntermediateTree> {
+impl SparseMerkleTreeI {
     /// Create a new Sparse Merkle Tree
     pub fn new() -> Self {
         let config = CircuitConfig::standard_recursion_config();
         Self {
-            circuit_builder: ZkCircuitBuilder::new(config),
-            plonky2_system: Plonky2System::default(), // Assuming `Default` trait implemented
+            circuit_builder: CircuitBuilder::new(config),
             root_hash: [0u8; 32],
             nodes: HashMap::new(),
             height: 256,
@@ -45,11 +44,12 @@ impl<RootTree, IntermediateTree> SparseMerkleTreeI<RootTree, IntermediateTree> {
     pub fn update(&mut self, key: &[u8], value: &[u8]) -> Result<(), SystemError> {
         let leaf_hash = self.hash_leaf(key, value);
         let path = self.generate_merkle_path(key)?;
-        let value_cell = self.circuit_builder.add_virtual_target();
-        let key_cell = self.circuit_builder.add_virtual_target();
+        let value_field = self.hash_to_field(&leaf_hash);
+        let value_cell = self.circuit_builder.add_public_input(value_field);
+        let key_field = self.hash_to_field(&self.hash_leaf(key, &[]));
+        let key_cell = self.circuit_builder.add_public_input(key_field);
         self.add_path_constraints(&path, key_cell, value_cell)?;
         self.root_hash = self.calculate_new_root(&path, &leaf_hash)?;
-        self.generate_update_proof(key, value, &path)?;
         Ok(())
     }
 
@@ -63,12 +63,10 @@ impl<RootTree, IntermediateTree> SparseMerkleTreeI<RootTree, IntermediateTree> {
         let mut current = self.circuit_builder.poseidon(&[key_cell, value_cell]);
 
         for (sibling, is_left) in path {
-            let sibling_cell = self.circuit_builder.add_virtual_target();
-            self.circuit_builder.assert_equal(
-                sibling_cell,
-                self.circuit_builder
-                    .constant_target(self.hash_to_field(sibling)),
-            );
+            let sibling_field = self.hash_to_field(sibling);
+            let sibling_cell = self.circuit_builder.add_public_input(sibling_field);
+            self.circuit_builder
+                .assert_equal(sibling_cell, self.circuit_builder.constant(sibling_field));
 
             let cells = if *is_left {
                 [current, sibling_cell]
@@ -78,45 +76,12 @@ impl<RootTree, IntermediateTree> SparseMerkleTreeI<RootTree, IntermediateTree> {
             current = self.circuit_builder.poseidon(&cells);
         }
 
-        let root_cell = self.circuit_builder.add_public_input();
+        let root_cell = self
+            .circuit_builder
+            .add_public_input(self.hash_to_field(&self.root_hash));
         self.circuit_builder.assert_equal(current, root_cell);
 
         Ok(())
-    }
-
-    /// Verify a proof for a given key-value pair
-    pub fn verify(&self, key: &[u8], value: &[u8], proof: &ZkProof) -> Result<bool, SystemError> {
-        let circuit = self
-            .circuit_builder
-            .build()
-            .map_err(|_| SystemError::InvalidProof)?;
-        self.plonky2_system
-            .verify_proof(&circuit, proof)
-            .map_err(|_| SystemError::InvalidProof)
-    }
-
-    /// Generate proof for an update
-    fn generate_update_proof(
-        &self,
-        key: &[u8],
-        value: &[u8],
-        path: &[([u8; 32], bool)],
-    ) -> Result<ZkProof, SystemError> {
-        let mut public_inputs = Vec::new();
-        public_inputs.extend_from_slice(key);
-        public_inputs.extend_from_slice(value);
-
-        for (hash, _) in path {
-            public_inputs.extend_from_slice(hash);
-        }
-
-        let witness = self.generate_witness(key, value, path)?;
-        let proof = self
-            .plonky2_system
-            .generate_proof(&self.circuit_builder, &public_inputs, &witness)
-            .map_err(|_| SystemError::InvalidProof)?;
-
-        Ok(proof)
     }
 
     /// Generate Merkle path for a given key
@@ -126,16 +91,25 @@ impl<RootTree, IntermediateTree> SparseMerkleTreeI<RootTree, IntermediateTree> {
 
         for i in 0..self.height {
             let bit = self.get_bit(key, i);
-            let node = self.nodes.get(&current).ok_or(SystemError::NodeNotFound)?;
+            let node = self.nodes.get(&current).ok_or(SystemError::new(
+                SystemErrorType::NodeNotFound,
+                "Node not found in path".to_string(),
+            ))?;
 
             if bit {
-                if let Some(left) = node.left {
-                    path.push((left, true));
-                    current = node.right.ok_or(SystemError::InvalidPath)?;
-                }
-            } else if let Some(right) = node.right {
-                path.push((right, false));
-                current = node.left.ok_or(SystemError::InvalidPath)?;
+                let right_hash = node.right.ok_or(SystemError::new(
+                    SystemErrorType::InvalidPath,
+                    "Invalid path".to_string(),
+                ))?;
+                path.push((right_hash, true));
+                current = right_hash;
+            } else {
+                let left_hash = node.left.ok_or(SystemError::new(
+                    SystemErrorType::InvalidPath,
+                    "Invalid path".to_string(),
+                ))?;
+                path.push((left_hash, false));
+                current = left_hash;
             }
         }
 
@@ -147,10 +121,7 @@ impl<RootTree, IntermediateTree> SparseMerkleTreeI<RootTree, IntermediateTree> {
         let mut hasher = Sha256::new();
         hasher.update(key);
         hasher.update(value);
-        let result = hasher.finalize();
-        let mut hash = [0u8; 32];
-        hash.copy_from_slice(&result);
-        hash
+        hasher.finalize().into()
     }
 
     /// Calculate the new root hash after updating a leaf
@@ -188,11 +159,11 @@ impl<RootTree, IntermediateTree> SparseMerkleTreeI<RootTree, IntermediateTree> {
     }
 
     /// Convert hash to a field element
-    fn hash_to_field(&self, bytes: &[u8; 32]) -> usize {
-        bytes
-            .iter()
-            .take(8)
-            .fold(0, |acc, &byte| (acc << 8) | (byte as usize))
+    fn hash_to_field(&self, bytes: &[u8; 32]) -> GoldilocksField {
+        let mut array = [0u8; 8];
+        array.copy_from_slice(&bytes[0..8]);
+        let num = u64::from_le_bytes(array);
+        GoldilocksField::from_canonical_u64(num)
     }
 
     /// Return the current root hash of the tree
@@ -203,14 +174,29 @@ impl<RootTree, IntermediateTree> SparseMerkleTreeI<RootTree, IntermediateTree> {
     /// Serialize the tree state to a BOC format
     pub fn serialize_state(&self) -> Result<BOC, SystemError> {
         let mut boc = BOC::new();
-        boc.add_cell(Cell::new(self.root_hash.to_vec(), None)?);
+        boc.add_cell(Cell::new(
+            self.root_hash.to_vec(),
+            vec![],
+            CellType::Root,
+            self.root_hash,
+            None,
+        ));
 
         for (hash, node) in &self.nodes {
             let mut node_data = Vec::new();
-            node_data.extend_from_slice(hash);
-            node_data.extend_from_slice(&node.key);
-            node_data.extend_from_slice(&node.value);
-            boc.add_cell(Cell::new(node_data, None)?)?;
+            if let Some(left) = node.left {
+                node_data.extend_from_slice(&left);
+            }
+            if let Some(right) = node.right {
+                node_data.extend_from_slice(&right);
+            }
+            boc.add_cell(Cell::new(
+                node_data,
+                vec![],
+                CellType::Internal,
+                *hash,
+                None,
+            ));
         }
 
         Ok(boc)

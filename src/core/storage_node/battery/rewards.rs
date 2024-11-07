@@ -33,11 +33,7 @@ impl RewardDistributor {
         Ok(reward)
     }
 
-    pub async fn distribute_rewards(
-        &self,
-        transaction_fees: u64,
-        node_address: [u8; 32],
-    ) -> Result<u64, SystemError> {
+    pub async fn distribute_rewards(&self, transaction_fees: u64) -> Result<u64, SystemError> {
         let reward = self.calculate_reward(transaction_fees)?;
 
         if reward > 0 {

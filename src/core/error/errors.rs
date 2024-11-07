@@ -51,6 +51,8 @@ pub enum SystemErrorType {
     InsufficientBalance,
     SpendingLimitExceeded,
     BatteryError,
+    NoRootCell,
+    InvalidOperation,
 }
 
 impl fmt::Display for SystemErrorType {
@@ -63,6 +65,8 @@ impl fmt::Display for SystemErrorType {
             Self::InsufficientBalance => write!(f, "Insufficient balance"),
             Self::SpendingLimitExceeded => write!(f, "Spending limit exceeded"),
             Self::BatteryError => write!(f, "Battery error"),
+            Self::NoRootCell => write!(f, "No root cell"),
+            Self::InvalidOperation => write!(f, "Invalid operation"),
         }
     }
 }
@@ -172,6 +176,8 @@ pub enum BocError {
     InvalidRoot(usize),
     InvalidMerkleProof,
     InvalidPrunedBranch,
+    SerializationError(String),
+    DeserializationError(String),
     CycleDetected,
     MaxDepthExceeded,
 }
@@ -192,6 +198,8 @@ impl fmt::Display for BocError {
             BocError::InvalidPrunedBranch => write!(f, "Invalid pruned branch"),
             BocError::CycleDetected => write!(f, "Cycle detected"),
             BocError::MaxDepthExceeded => write!(f, "Max depth exceeded"),
+            BocError::SerializationError(err) => write!(f, "Serialization error: {}", err),
+            BocError::DeserializationError(err) => write!(f, "Deserialization error: {}", err),
         }
     }
 }
