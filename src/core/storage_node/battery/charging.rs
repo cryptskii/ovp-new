@@ -26,19 +26,18 @@ impl BatteryChargingSystem {
 
     pub async fn charge_for_processing(&self) -> Result<(), SystemErrorType> {
         let current_level = self.battery_level.load(Ordering::Acquire);
-
         if current_level < self.config.min_battery {
             return Err(SystemErrorType::InsufficientBalance(
                 "Insufficient charge".into(),
             ));
         }
-
-        if current_level < self.config.discharge_rate {
-            return Err(SystemErrorType::InsufficientBalance(
-                "Discharge rate exceeds current level".into(),
+        let now = window().unwrap().performance().unwrap().now() as u64;
+        let last_charge = self.last_charge_time.load(Ordering::Acquire);
+        if now - last_charge < self.config.charge_cooldown {
+            return Err(SystemErrorType::Generic(
+                "Charging too frequently".to_string(),
             ));
         }
-
         self.battery_level
             .fetch_sub(self.config.discharge_rate, Ordering::Release);
         self.update_reward_multiplier();
@@ -49,7 +48,7 @@ impl BatteryChargingSystem {
 
         let last_charge = self.last_charge_time.load(Ordering::Acquire);
         if now - last_charge < self.config.charge_cooldown {
-            return Err(SystemErrorType::Other(
+            return Err(SystemErrorType::Generic(
                 "Charging too frequently".to_string(),
             ));
         }
@@ -90,12 +89,12 @@ impl BatteryChargingSystem {
         let mut attempts = 0;
         while self.battery_level.load(Ordering::Acquire) < self.config.min_battery {
             if attempts >= self.config.max_charge_attempts {
-                return Err(SystemErrorType::Other(
+                return Err(SystemErrorType::Generic(
                     "Max charging attempts exceeded".into(),
                 ));
             }
             if self.battery_level.load(Ordering::Acquire) == 0 {
-                return Err(SystemErrorType::Other(
+                return Err(SystemErrorType::Generic(
                     "Node suspended due to depleted battery".into(),
                 ));
             }

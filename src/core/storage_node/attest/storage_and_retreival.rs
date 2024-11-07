@@ -3,10 +3,10 @@
 // Storage and Retrieval Verification
 // This module is the entry point for accessing the storage nodes' storage and retrieval capabilities.
 // It provides methods for storing and retrieving data, as well as verifying the proofs provided by the storage nodes.
-use crate::core::storage_node::storage_node::StorageNode;
-use crate::core::types::SystemError;
-use crate::core::types::ZkProof;
-use crate::core::types::BOC;
+use crate::core::error::errors::SystemError;
+use crate::core::storage_node::storage_node_contract::StorageNode;
+use crate::core::types::boc::BOC;
+use crate::core::zkps::proof::ZkProof;
 
 use std::sync::Arc;
 
