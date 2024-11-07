@@ -1,4 +1,5 @@
 use crate::core::error::errors::{SystemError, SystemErrorType};
+use crate::core::hierarchy::intermediate::sparse_merkle_tree_i::MerkleNode;
 use crate::core::types::boc::{Cell, CellType, BOC};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::iop::target::Target;
@@ -17,6 +18,8 @@ pub trait RootTreeManagerTrait {
     /// Serialize the tree state to a BOC format
     fn serialize_global_state(&self) -> Result<BOC, SystemError>;
 }
+
+type VirtualCell = Target;
 
 /// Sparse Merkle Tree Implementation
 pub struct SparseMerkleTreeR {
@@ -50,19 +53,19 @@ impl SparseMerkleTreeR {
 
     /// Update a leaf in the Merkle tree
     pub fn update_global_tree(&mut self, key: &[u8], value: &[u8]) -> Result<(), SystemError> {
-        let leaf_hash = self.hash_leaf(key, value);
-        let path = self.generate_merkle_path(key)?;
+        let leaf_hash = self.hash_global_leaf(key, value);
+        let path = self.generate_global_merkle_path(key)?;
         let _value_field = self.hash_to_field(&leaf_hash);
         let _value_cell = self.circuit_builder.add_virtual_public_input();
-        let _key_field = self.hash_to_field(&self.hash_leaf(key, &[]));
+        let _key_field = self.hash_to_field(&self.hash_global_leaf(key, &[]));
         let _key_cell = self.circuit_builder.add_virtual_public_input();
-        self.add_path_constraints(&path, _key_cell, _value_cell)?;
-        self.root_hash = self.calculate_new_root(&path, &leaf_hash)?;
+        self.add_global_path_constraints(&path, _key_cell, _value_cell)?;
+        self.root_hash = self.calculate_new_global_root(&path, &leaf_hash)?;
         Ok(())
     }
 
-    pub fn add_virtual_global_public_input(&mut self) -> Target {
-        self.circuit_builder.add_virtual_global_public_input()
+    pub fn add_virtual_public_input(&mut self) -> Target {
+        self.circuit_builder.add_virtual_public_input()
     }
 
     /// Add constraints to the path in the zk-SNARK circuit
@@ -181,7 +184,7 @@ impl SparseMerkleTreeR {
 
     /// Return the global root hash of the tree
     pub fn get_global_root_hash(&self) -> [u8; 32] {
-        self.global_root_hash
+        self.root_hash
     }
 
     /// Serialize the tree state to a BOC format
