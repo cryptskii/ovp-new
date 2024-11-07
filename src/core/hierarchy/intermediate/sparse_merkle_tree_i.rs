@@ -1,8 +1,8 @@
+use crate::core::error::errors::{BocError, SystemError, SystemErrorType, ZkProofError};
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
-
-type VirtualCell = usize; // Placeholder for actual VirtualCell type
+use std::collections::HashMap;
 
 /// Intermediate Tree Trait
 pub trait IntermediateTreeManagerTrait {
@@ -14,10 +14,18 @@ pub trait IntermediateTreeManagerTrait {
     ) -> Result<(), SystemError>;
 }
 
+type VirtualCell = usize; // Placeholder for actual VirtualCell type
+
 /// Merkle Tree Node
 pub struct MerkleNode {
     pub left: Option<[u8; 32]>,
     pub right: Option<[u8; 32]>,
+    pub hash: Option<[u8; 32]>,
+    pub virtual_cell: Option<VirtualCell>,
+    pub value: Option<[u8; 32]>,
+    pub is_leaf: bool,
+    pub is_virtual: bool,
+    pub is_empty: bool,
 }
 
 /// Sparse Merkle Tree Implementation
@@ -26,6 +34,10 @@ pub struct SparseMerkleTreeI {
     root_hash: [u8; 32],
     nodes: HashMap<[u8; 32], MerkleNode>,
     height: usize,
+    virtual_cells: HashMap<VirtualCell, MerkleNode>,
+    virtual_cell_count: usize,
+    current_virtual_cell: VirtualCell,
+    current_virtual_cell_count: usize,
 }
 
 impl SparseMerkleTreeI {

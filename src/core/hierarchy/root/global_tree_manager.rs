@@ -1,6 +1,6 @@
 // src/core/global/global_tree_manager.rs
 
-use crate::core::error::errors::ZkProofError;
+use crate::core::error::errors::{SystemError, SystemErrorType, ZkProofError, ZkProofErrorType};
 use crate::core::zkps::proof::ZkProof;
 use blake2::{Blake2b, Digest};
 
