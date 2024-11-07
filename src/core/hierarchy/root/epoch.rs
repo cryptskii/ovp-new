@@ -2,8 +2,6 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use crate::core::types::EpochStatus;
-
 pub struct Epoch {
     pub epoch_number: u64,
     pub start_time: u64,

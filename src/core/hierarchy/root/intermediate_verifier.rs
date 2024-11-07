@@ -1,7 +1,5 @@
 // src/core/global/intermediate_verifier.rs
 
-use crate::core::types::ovp_types::*;
-
 #[derive(Debug)]
 pub enum VerificationError {
     InvalidProof,
