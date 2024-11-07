@@ -129,7 +129,7 @@ fn generate_channel_id(wallet_id: &[u8; 32], counterparty: &[u8; 32]) -> Result<
     let mut hasher = Sha256::new();
     hasher.update(wallet_id);
     hasher.update(counterparty);
-    hasher.update(&current_timestamp().to_le_bytes());
+    hasher.update(¤t_timestamp().to_le_bytes());
     let mut channel_id = [0u8; 32];
     channel_id.copy_from_slice(&hasher.finalize());
     Ok(channel_id)
@@ -141,7 +141,7 @@ fn current_timestamp() -> u64 {
 
 fn generate_tx_id() -> [u8; 32] {
     let mut hasher = Sha256::new();
-    hasher.update(&current_timestamp().to_le_bytes());
+    hasher.update(¤t_timestamp().to_le_bytes());
     let result = hasher.finalize();
     let mut tx_id = [0u8; 32];
     tx_id.copy_from_slice(&result[..32]);
@@ -163,83 +163,13 @@ fn generate_signature(tx: &Transaction, private_key: &[u8; 32]) -> Result<[u8; 6
     Ok(signature)
 }
 
-// Type definitions and implementations
-#[derive(Serialize, Deserialize, Clone)]
-pub struct CreateChannelParams {
-    pub counterparty: ByteArray32,
-    pub initial_balance: u64,
-    pub config: ChannelConfig,
-    pub spending_limit: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct ChannelUpdate {
-    pub new_state: PrivateChannelState,
-    pub balance: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct WalletStateUpdate {
-    pub old_balance: u64,
-    pub old_nonce: u64,
-    pub new_balance: u64,
-    pub new_nonce: u64,
-    pub transfer_amount: u64,
-    pub merkle_root: [u8; 32],
-    // Add other necessary fields
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct TransactionRequest {
-    pub channel_id: ByteArray32,
-    pub recipient: ByteArray32,
-    pub amount: u64,
-    pub fee: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct Transaction {
-    pub id: [u8; 32],
-    pub channel_id: [u8; 32],
-    pub sender: [u8; 32],
-    pub recipient: [u8; 32],
-    pub amount: u64,
-    pub nonce: u64,
-    pub sequence_number: u64,
-    pub timestamp: u64,
-    pub status: TransactionStatus,
-    pub signature: Signature,
-    pub zk_proof: Vec<u8>,
-    pub merkle_proof: Vec<u8>,
-    pub previous_state: Vec<u8>,
-    pub new_state: Vec<u8>,
-    pub fee: u64,
-}
-
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
-pub enum TransactionStatus {
-    Pending,
-    Confirmed,
-    Failed,
-}
-
-impl Transaction {
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        bincode::serialize(self).map_err(|e| {
-            Error::SerializationError(format!("Failed to serialize transaction: {:?}", e))
-        })
-    }
-}
-
 fn get_next_nonce(state: &PrivateChannelState) -> u64 {
     state.nonce + 1
 }
 
 fn get_next_sequence(state: &PrivateChannelState) -> u64 {
     state.sequence_number + 1
-}
-
-fn process_transaction(state: &mut PrivateChannelState, tx: Transaction) -> Result<(), Error> {
+}fn process_transaction(state: &mut PrivateChannelState, tx: Transaction) -> Result<(), Error> {
     // Simplified transaction processing
 
     state.nonce = tx.nonce;
@@ -251,48 +181,7 @@ fn process_transaction(state: &mut PrivateChannelState, tx: Transaction) -> Resu
     Ok(())
 }
 
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct PrivateChannelState {
-    pub balance: u64,
-    pub nonce: u64,
-    pub sequence_number: u64,
-    pub merkle_root: [u8; 32],
-    // Add other necessary fields
-}
 
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct RebalanceConfig {
-    pub min_balance: u64,
-    pub max_balance: u64,
-    pub rebalance_threshold: u64,
-    pub auto_rebalance: bool,
-    pub rebalance_interval: u64,
-    pub last_rebalance_timestamp: u64,
-    pub target_balance: u64,
-    pub allowed_deviation: u64,
-    pub emergency_threshold: u64,
-    pub max_rebalance_attempts: u32,
-}
-
-#[derive(Serialize, Deserialize, Clone, Default)]
-pub struct ChannelConfig {
-    pub channel_id: [u8; 32],
-    pub capacity: u64,
-    pub min_deposit: u64,
-    pub max_deposit: u64,
-    pub timeout_period: u64,
-    pub fee_rate: u64,
-    pub is_active: bool,
-    pub participants: Vec<[u8; 32]>,
-    pub creation_timestamp: u64,
-    pub last_update_timestamp: u64,
-    pub settlement_delay: u64,
-    pub dispute_window: u64,
-    pub max_participants: u32,
-    pub channel_type: u8,
-    pub security_deposit: u64,
-    pub auto_close_threshold: u64,
-}
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct WalletStorageManager {

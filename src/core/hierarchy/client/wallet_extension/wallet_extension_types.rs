@@ -56,6 +56,49 @@ pub struct WalletStateUpdate {
     // Add other necessary fields
 }
 
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct PrivateChannelState {
+    pub balance: u64,
+    pub nonce: u64,
+    pub sequence_number: u64,
+    pub merkle_root: [u8; 32],
+    // Add other necessary fields
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct RebalanceConfig {
+    pub min_balance: u64,
+    pub max_balance: u64,
+    pub rebalance_threshold: u64,
+    pub auto_rebalance: bool,
+    pub rebalance_interval: u64,
+    pub last_rebalance_timestamp: u64,
+    pub target_balance: u64,
+    pub allowed_deviation: u64,
+    pub emergency_threshold: u64,
+    pub max_rebalance_attempts: u32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Default)]
+pub struct ChannelConfig {
+    pub channel_id: [u8; 32],
+    pub capacity: u64,
+    pub min_deposit: u64,
+    pub max_deposit: u64,
+    pub timeout_period: u64,
+    pub fee_rate: u64,
+    pub is_active: bool,
+    pub participants: Vec<[u8; 32]>,
+    pub creation_timestamp: u64,
+    pub last_update_timestamp: u64,
+    pub settlement_delay: u64,
+    pub dispute_window: u64,
+    pub max_participants: u32,
+    pub channel_type: u8,
+    pub security_deposit: u64,
+    pub auto_close_threshold: u64,
+}
+
 #[derive(Serialize, Deserialize, Clone)]
 pub struct TransactionRequest {
     pub channel_id: ByteArray32,
@@ -202,29 +245,6 @@ impl Default for Channel {
 }
 
 #[derive(Debug, Clone)]
-pub struct ChannelConfig {
-    pub min_balance: u64,
-    pub max_balance: u64,
-    pub challenge_period: u64,
-    pub max_state_size: usize,
-    pub max_participants: usize,
-    pub timeout: u64,
-}
-
-impl Default for ChannelConfig {
-    fn default() -> Self {
-        Self {
-            min_balance: 0,
-            max_balance: u64::MAX,
-            challenge_period: 3600, // 1 hour default
-            max_state_size: 1024,   // 1KB default
-            max_participants: 2,    // Default to 2 participants
-            timeout: 86400,         // 24 hours default
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
 pub struct StateTransition {
     pub old_state: PrivateChannelState,
     pub new_state: PrivateChannelState,
@@ -238,52 +258,6 @@ impl Default for StateTransition {
             old_state: PrivateChannelState::default(),
             new_state: PrivateChannelState::default(),
             proof: ZkProof::default(),
-            timestamp: 0,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct PrivateChannelState {
-    pub balance: u64,
-    pub nonce: u64,
-    pub sequence_number: u64,
-    #[serde(with = "serde_arrays")]
-    pub proof: [u8; 64],
-    #[serde(with = "serde_arrays")]
-    pub signature: [u8; 64],
-    #[serde(with = "serde_arrays")]
-    pub transaction: [u8; 32],
-    pub witness: Vec<u8>,
-    #[serde(with = "serde_arrays")]
-    pub merkle_root: [u8; 32],
-    pub merkle_proof: Vec<u8>,
-    pub last_update: u64,
-}
-
-impl Default for PrivateChannelState {
-    fn default() -> Self {
-        Self {
-            balance: 0,
-            nonce: 0,
-            sequence_number: 0,
-            proof: [0u8; 64],
-            signature: [0u8; 64],
-            transaction: [0u8; 32],
-            witness: Vec::new(),
-            merkle_root: [0u8; 32],
-            merkle_proof: Vec::new(),
-            last_update: 0,
-        }
-    }
-}
-
-impl Default for ZkProof {
-    fn default() -> Self {
-        Self {
-            proof_data: vec![0u8; 64],
-            public_inputs: Vec::new(),
-            merkle_root: vec![0u8; 32],
             timestamp: 0,
         }
     }
@@ -385,61 +359,29 @@ impl WalletBalanceTracker {
     }
     fn get_previous_state(
         &self,
-        _channel_id: &[u8; 32],
+        channel_id: &[u8; 32],
         balance: u64,
     ) -> Result<PrivateChannelState, Error> {
-        Ok(PrivateChannelState {
-            balance,
-            nonce: 0,
-            sequence_number: 0,
-            proof: [0u8; 64],
-            signature: [0u8; 64],
-            transaction: [0u8; 32],
-            witness: vec![],
-            merkle_root: [0u8; 32],
-            merkle_proof: vec![],
-            last_update: 0,
-        })
-    }
+        let state_transitions = self
+            .state_transitions
+            .get(channel_id)
+            .ok_or(Error::StakeError("No state transitions".to_string()))?;
+        let state_tree = self
+            .state_tree
+            .read()
+            .map_err(|_| Error::StakeError("Lock acquisition failed".to_string()))?;
+        let state_boc = state_tree
+            .get(&channel_id)
+            .map_err(|_| Error::StakeError("State tree lookup failed".to_string()))?;
+        let state_boc = BOC::deserialize(state_boc)
+            .map_err(|_| Error::StakeError("State tree deserialization failed".to_string()))?;
+        let state_cell = state_boc
+            .get_cell(0)
+            .ok_or(Error::StakeError("No state cell".to_string()))?;
+        let state = PrivateChannelState::deserialize(&state_cell.data)
+            .map_err(|_| Error::StakeError("State deserialization failed".to_string()))?;
 
-    fn create_new_state(
-        &self,
-        _channel_id: &[u8; 32],
-        balance: u64,
-    ) -> Result<PrivateChannelState, Error> {
-        Ok(PrivateChannelState {
-            balance,
-            nonce: 0,
-            sequence_number: 0,
-            proof: [0u8; 64],
-            signature: [0u8; 64],
-            transaction: [0u8; 32],
-            witness: vec![],
-            merkle_root: [0u8; 32],
-            merkle_proof: vec![],
-            last_update: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap()
-                .as_secs(),
-        })
-    }
-
-    fn create_transition_proof(
-        &self,
-        old_balance: u64,
-        new_balance: u64,
-    ) -> Result<ZkProof, Error> {
-        let timestamp = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        Ok(ZkProof::new(
-            vec![0u8; 64],                  // Proof data
-            vec![old_balance, new_balance], // Public inputs
-            vec![0u8; 32],                  // Merkle root
-            timestamp,
-        ))
+        Ok(state)
     }
 }
 
