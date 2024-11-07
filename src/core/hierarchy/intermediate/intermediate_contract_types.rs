@@ -2,7 +2,6 @@
 
 use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::ChannelClosureRequest;
 
-use crate::core::hierarchy::client::wallet_extension::tree_manager::TreeManager;
 use crate::core::hierarchy::intermediate::destination_contract::DestinationContract;
 use crate::core::hierarchy::intermediate::sparse_merkle_tree_i::SparseMerkleTreeI;
 use crate::core::storage_node::storage_node_contract::StorageNode;
@@ -31,12 +30,11 @@ pub struct IntermediateContract<RebalanceRequest> {
     pub state_update_interval: Duration,
     pub storage_nodes: StorageNode<String, Vec<u8>>,
     pub rebalance_queue: VecDeque<RebalanceRequest>,
-    pub tree_manager: TreeManager,
+
     pub zk_verifier: Plonky2System,
     _phantom: PhantomData<(
         SparseMerkleTreeI,
         StorageNode<String, Vec<u8>>,
-        TreeManager,
         Plonky2System,
     )>,
 }

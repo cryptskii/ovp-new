@@ -20,6 +20,12 @@ struct LeafNodeWasm {
     right: Option<Box<LeafNodeWasm>>,
 }
 
+impl Default for SparseMerkleTreeWasm {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[wasm_bindgen]
 impl SparseMerkleTreeWasm {
     #[wasm_bindgen(constructor)]

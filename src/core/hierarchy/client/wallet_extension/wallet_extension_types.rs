@@ -11,7 +11,6 @@ use aes_gcm::aead::{Aead, Payload};
 use aes_gcm::KeyInit;
 use ed25519_dalek::Signature;
 use serde::{Deserialize, Serialize};
-use sha2::Digest;
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, RwLock};
@@ -150,7 +149,27 @@ pub struct ChannelClosureRequest {
     pub final_balance: u64,
     pub boc: Vec<u8>,
     pub proof: ZkProof,
-    pub signature: [u8; 64],
+    pub signature: Vec<u8>,
+    pub timestamp: u64,
+    pub merkle_proof: Vec<u8>,
+    pub previous_state: Vec<u8>,
+    pub new_state: Vec<u8>,
+}
+
+impl Default for ChannelClosureRequest {
+    fn default() -> Self {
+        ChannelClosureRequest {
+            channel_id: [0; 32],
+            final_balance: 0,
+            boc: Vec::new(),
+            proof: ZkProof::new(Vec::new(), Vec::new(), Vec::new(), 0),
+            signature: Vec::new(),
+            timestamp: 0,
+            merkle_proof: Vec::new(),
+            previous_state: Vec::new(),
+            new_state: Vec::new(),
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -161,30 +180,41 @@ pub struct WalletExtension {
     pub rebalance_config: RebalanceConfig,
     pub proof_system: Arc<PlonkySystemHandleWrapper>,
     pub state_tree: SparseMerkleTreeWasm,
+    pub root_hash: [u8; 32],
+    pub balance: u64,
     pub encrypted_states: Arc<StorageNode<ByteArray32, Vec<u8>>>,
-    pub balance_tracker: WalletBalanceTracker,
-    pub root_tracker: RootStateTracker<[u8; 32]>,
 }
 impl fmt::Debug for WalletExtension {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("WalletExtension")
             .field("wallet_id", &self.wallet_id)
+            .field("channels", &self.channels)
             .field("total_locked_balance", &self.total_locked_balance)
             .field("rebalance_config", &self.rebalance_config)
+            .field("proof_system", &self.proof_system)
             .field("state_tree", &self.state_tree)
-            .field("balance_tracker", &self.balance_tracker)
-            .field("root_tracker", &self.root_tracker)
+            .field("root_hash", &self.root_hash)
+            .field("balance", &self.balance)
+            .field("encrypted_states", &"<encrypted_states>")
             .finish()
     }
 }
-
 pub struct WalletExtensionStateChange {
     pub op: WalletExtensionStateChangeOp,
     pub channel_id: [u8; 32],
     pub wallet_id: [u8; 32],
     pub state: WalletExtension,
+    pub balance: u64,
+    pub root_hash: [u8; 32],
+    pub proof: Vec<u8>,
+    pub signature: Vec<u8>,
+    pub public_key: Vec<u8>,
+    pub nonce: u64,
+    pub fee: u64,
+    pub merkle_proof: Vec<u8>,
+    pub previous_state: Vec<u8>,
+    pub new_state: Vec<u8>,
 }
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Channel {
     pub channel_id: [u8; 32],
@@ -237,136 +267,132 @@ impl Default for StateTransition {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct WalletBalanceTracker {
-    pub wallet_balances: HashMap<[u8; 32], u64>,
-    pub state_transitions: HashMap<[u8; 32], Vec<[u8; 32]>>,
-    pub state_tree: Arc<RwLock<SparseMerkleTreeWasm>>,
-    pub last_root: [u8; 32],
-    pub pending_updates: Vec<StateTransition>,
-}
+pub fn update_balance(
+    channel_id: [u8; 32],
+    old_balance: u64,
+    new_balance: u64,
+    boc: &BOC,
+    wallet_balances: &mut HashMap<[u8; 32], u64>,
+    state_transitions: &mut HashMap<[u8; 32], Vec<StateTransition>>,
+    state_tree: &RwLock<SparseMerkleTreeWasm>,
+    last_root: &mut [u8; 32],
+    pending_updates: &mut Vec<StateTransition>,
+) -> Result<(), Error> {
+    wallet_balances.insert(channel_id, new_balance);
 
-impl WalletBalanceTracker {
-    pub fn new() -> Self {
-        Self {
-            wallet_balances: HashMap::new(),
-            state_transitions: HashMap::new(),
-            state_tree: Arc::new(RwLock::new(SparseMerkleTreeWasm::new())),
-            last_root: [0u8; 32],
-            pending_updates: Vec::new(),
-        }
-    }
+    let transitions = state_transitions.entry(channel_id).or_insert_with(Vec::new);
 
-    pub fn get_current_balance(&self, channel_id: &[u8; 32]) -> Result<u64, Error> {
-        self.wallet_balances
-            .get(channel_id)
-            .copied()
-            .ok_or(Error::ChannelNotFound("Channel not found".to_string()))
-    }
+    if let Some(root_cell) = boc.get_root_cell() {
+        let root_hash = root_cell.repr_hash();
+        transitions.push(StateTransition::default()); // Placeholder, update as needed
 
-    pub fn update_balance(
-        &mut self,
-        channel_id: [u8; 32],
-        old_balance: u64,
-        new_balance: u64,
-        boc: &BOC,
-    ) -> Result<(), Error> {
-        self.wallet_balances.insert(channel_id, new_balance);
-
-        if let Some(root_cell) = boc.get_root_cell() {
-            hasher.update(&root_cell.data);
-            let mut root_hash = [0u8; 32];
-            root_hash.copy_from_slice(&hasher.finalize());
-
-            let transitions = self
-                .state_transitions
-                .entry(channel_id)
-                .or_insert_with(Vec::new);
-            transitions.push(root_hash);
-
-            let mut state_tree = self
-                .state_tree
-                .write()
-                .map_err(|_| Error::StakeError("Lock acquisition failed".to_string()))?;
-
-            let state_cell = Cell::new(
-                root_cell.data.clone(),
-                root_cell.references.clone(),
-                CellType::Ordinary,
-                root_hash,
-                None,
-            );
-
-            let mut state_boc = BOC::new();
-            state_boc.add_cell(state_cell);
-            state_boc.add_root(0);
-
-            let state_boc_bytes = state_boc
-                .serialize()
-                .map_err(|_| Error::StakeError("BOC serialization failed".to_string()))?;
-            state_tree
-                .update(&channel_id[..], &state_boc_bytes)
-                .map_err(|_| Error::StakeError("State update failed".to_string()))?;
-            self.last_root = root_hash;
-
-            let transition = StateTransition {
-                old_state: self.get_previous_state(&channel_id, old_balance)?,
-                new_state: PrivateChannelState::default(),
-                proof: ZkProof::new(Vec::new(), Vec::new(), Vec::new(), 0),
-                timestamp: std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .unwrap()
-                    .as_secs(),
-            };
-
-            self.pending_updates.push(transition);
-            Ok(())
-        } else {
-            Err(Error::StakeError("Invalid BOC: no root cell".to_string()))
-        }
-    }
-
-    fn get_previous_state(
-        &self,
-        channel_id: &[u8; 32],
-        balance: u64,
-    ) -> Result<PrivateChannelState, Error> {
-        let state_transitions = self
-            .state_transitions
-            .get(channel_id)
-            .ok_or(Error::StakeError("No state transitions".to_string()))?;
-        let state_tree = self
-            .state_tree
-            .read()
+        let mut state_tree_guard = state_tree
+            .write()
             .map_err(|_| Error::StakeError("Lock acquisition failed".to_string()))?;
-        let state_boc = state_tree
-            .get(&channel_id[..])
-            .map_err(|_| Error::StakeError("State tree lookup failed".to_string()))?
-            .ok_or(Error::StakeError("State not found".to_string()))?;
 
-        // Deserialize state BOC into a Cell
-        let binding = BOC::deserialize(&state_boc)
-            .map_err(|_| Error::StakeError("Failed to deserialize state BOC".to_string()))?;
-        let state_cell = binding
-            .get_root_cell()
-            .ok_or(Error::StakeError("Invalid BOC: no root cell".to_string()))?;
+        let state_cell = Cell::new(
+            root_cell.data().to_vec(),
+            root_cell.references().to_vec(),
+            CellType::Ordinary,
+            root_hash,
+            None,
+        );
 
-        // Deserialize state cell data into PrivateChannelState
-        let mut state = PrivateChannelState::default();
-        state.balance = balance;
+        let mut state_boc = BOC::new();
+        state_boc.add_cell(state_cell);
+        state_boc.add_root(0);
 
-        state.nonce = 0; // Assuming a default value, adjust as needed
-        state.sequence_number = state_transitions.len() as u64;
+        let state_boc_bytes = state_boc
+            .serialize()
+            .map_err(|_| Error::StakeError("BOC serialization failed".to_string()))?;
+        state_tree_guard
+            .update(&channel_id[..], &state_boc_bytes)
+            .map_err(|_| Error::StakeError("State update failed".to_string()))?;
+        *last_root = root_hash;
 
-        let hash_value =
-            crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::hash_value(
-                &state_cell.data,
-            );
-        state.merkle_root.copy_from_slice(&hash_value);
+        let transition = StateTransition {
+            old_state: get_previous_state(
+                &state_transitions,
+                state_tree,
+                &SparseMerkleTreeWasm::default(),
+                &channel_id,
+                old_balance,
+            )?,
+            new_state: PrivateChannelState::default(),
+            proof: ZkProof::new(Vec::new(), Vec::new(), Vec::new(), 0),
+            timestamp: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs(),
+        };
 
-        Ok(state)
+        pending_updates.push(transition);
+        Ok(())
+    } else {
+        Err(Error::StakeError("Invalid BOC: no root cell".to_string()))
     }
 }
+fn get_previous_state(
+    state_transitions: &HashMap<[u8; 32], Vec<StateTransition>>,
+    state_tree: &RwLock<SparseMerkleTreeWasm>,
+    sparse_merkle_tree_wasm: &SparseMerkleTreeWasm,
+    channel_id: &[u8; 32],
+    balance: u64,
+) -> Result<PrivateChannelState, Error> {
+    let _ = sparse_merkle_tree_wasm;
+    let state_transitions = state_transitions
+        .get(channel_id)
+        .ok_or(Error::StakeError("No state transitions".to_string()))?;
+
+    let state_tree = state_tree
+        .read()
+        .map_err(|_| Error::StakeError("Lock acquisition failed".to_string()))?;
+    let state_boc = state_tree
+        .get(&channel_id[..])
+        .map_err(|_| Error::StakeError("State tree lookup failed".to_string()))?
+        .ok_or(Error::StakeError("State not found".to_string()))?;
+
+    // Deserialize state BOC into a Cell
+    let binding = BOC::deserialize(&state_boc)
+        .map_err(|_| Error::StakeError("Failed to deserialize state BOC".to_string()))?;
+    let state_cell = binding
+        .get_root_cell()
+        .ok_or(Error::StakeError("Invalid BOC: no root cell".to_string()))?;
+
+    // Deserialize state cell data into PrivateChannelState
+    let mut state = PrivateChannelState::default();
+    state.balance = balance;
+
+    state.nonce = 0; // Assuming a default value, adjust as needed
+    state.sequence_number = state_transitions.len() as u64;
+
+    let hash_value =
+        crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::hash_value(
+            &state_cell.data,
+        );
+    state.merkle_root.copy_from_slice(&hash_value);
+
+    Ok(state)
+}
+
+pub fn get_state(
+    state_transitions: &HashMap<[u8; 32], Vec<EncryptedWalletState>>,
+    channel_id: &[u8; 32],
+) -> Result<Option<EncryptedWalletState>, Error> {
+    let state_transitions = state_transitions
+        .get(channel_id)
+        .ok_or(Error::StakeError("Channel not found".to_string()))?;
+
+    if state_transitions.is_empty() {
+        return Ok(None);
+    }
+    let state = state_transitions
+        .first()
+        .ok_or(Error::StakeError("No state found".to_string()))?;
+
+    Ok(Some(state.clone()))
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct RootStateTracker<WalletRoot> {
     pub root_history: Vec<WalletRoot>,

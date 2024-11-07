@@ -3,7 +3,6 @@
 // This module provides an implementation of the IntermediateContract struct, which is used to manage the state of the Overpass Network.
 // It includes methods to handle state updates, channel requests, channel closures, and rebalances.
 
-use crate::core::hierarchy::client::wallet_extension::tree_manager::TreeManager;
 use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::ChannelClosureRequest;
 use crate::core::hierarchy::intermediate::destination_contract::DestinationContract;
 use crate::core::hierarchy::intermediate::intermediate_contract_types::IntermediateContract;

@@ -31,6 +31,62 @@ impl fmt::Display for SystemErrorType {
     }
 }
 
+// Hash
+
+pub fn hash(data: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let mut hash = [0u8; 32];
+    hash.copy_from_slice(&hasher.finalize());
+    hash
+}
+
+// hash_pair
+pub fn hash_pair(left: &[u8], right: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(left);
+    hasher.update(right);
+    let mut hash = [0u8; 32];
+    hash.copy_from_slice(&hasher.finalize());
+    hash
+}
+
+// hash_value
+pub fn hash_value(value: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(value);
+    let mut hash = [0u8; 32];
+    hash.copy_from_slice(&hasher.finalize());
+    hash
+}
+
+// root_hash
+pub fn root_hash(data: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let mut hash = [0u8; 32];
+    hash.copy_from_slice(&hasher.finalize());
+    hash
+}
+
+// root cell hash
+pub fn root_cell_hash(data: &[u8]) -> [u8; 32] {
+    let mut hasher = Sha256::new();
+    hasher.update(data);
+    let mut hash = [0u8; 32];
+    hash.copy_from_slice(&hasher.finalize());
+    hash
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Cell {
+    pub data: Vec<u8>,
+    pub references: Vec<usize>,
+    pub cell_type: CellType,
+    pub merkle_hash: [u8; 32],
+    pub proof: Option<Vec<u8>>, // Added field for proof data
+}
+
 #[derive(Debug, Clone)]
 pub struct SystemError {
     pub error_type: SystemErrorType,
