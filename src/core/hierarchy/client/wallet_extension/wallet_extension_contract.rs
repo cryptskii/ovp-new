@@ -1,16 +1,14 @@
 use crate::core::error::errors::{SystemError, SystemErrorType};
+use crate::core::hierarchy::client::wallet_extension::wallet_utils::*;
 use crate::core::hierarchy::client::*;
 use crate::core::storage_node::*;
 use crate::core::tokens::*;
 use crate::core::types::*;
-use crate::core::utils::*;
 use crate::core::zkps::proof::*;
 use crate::core::zkps::zkp_interface::*;
 use crate::core::zkps::{plonky2::*, *};
 use js_sys::{Date, Promise, Uint8Array};
-use js_sys::{Date, Promise, Uint8Array};
-use plonky2::field::goldilocks_field::GoldilocksField;
-use plonky2::iop::target::Target;
+
 use serde::{Deserialize, Serialize};
 use serde_wasm_bindgen;
 use sha2::{Digest, Sha256};

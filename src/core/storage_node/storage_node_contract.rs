@@ -59,7 +59,7 @@ impl StorageNode {
     ) -> Result<Self, SystemError> {
         if initial_stake < 1000 {
             return Err(SystemError {
-                error_type: SystemErrorType::InvalidArgument,
+                error_type: SystemErrorType::InvalidInput,
                 message: "Insufficient initial stake".to_string(),
             });
         }

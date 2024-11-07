@@ -76,7 +76,7 @@ async-trait = "0.1"
 # WebAssembly Dependencies
 wasm-bindgen = "0.2.83"
 js-sys = "0.3.60"
-web-sys = { version = "0.3.72", features = ["Window", "Storage", "Performance", "console", "WebSocket", "MessageEvent"] }
+web-sys = { version = "0.3.72", features = ["Window", "Storage", "Performance", "console", "WebSocket", "MessageEvent", "Url", "Blob"] }
 wasm-bindgen-futures = "0.4.33"
 console_error_panic_hook = { version = "0.1.7", optional = true }
 
