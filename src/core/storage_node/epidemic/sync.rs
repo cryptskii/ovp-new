@@ -1,7 +1,8 @@
 // ./src/core/storage_node/epidemic/sync.rs
 
+use crate::core::error::SystemError;
 use crate::core::storage_node::storage_node_contract::StorageNode;
-use crate::core::types::ovp_types::*;
+
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,8 +15,11 @@ pub struct SynchronizationManager<RootTree, IntermediateTreeManager> {
     synchronization_boost_interval: Duration,
     min_synchronization_boost: u64,
     max_synchronization_boost: u64,
+    _phantom: std::marker::PhantomData<IntermediateTreeManager>,
 }
-impl<RootTree, IntermediateTreeManager> SynchronizationManager<RootTree, IntermediateTreeManager> {
+impl<RootTree: 'static, IntermediateTreeManager: 'static>
+    SynchronizationManager<RootTree, IntermediateTreeManager>
+{
     pub fn new(
         storage_node: Arc<StorageNode<RootTree, IntermediateTreeManager>>,
         synchronization_boost_interval: Duration,
@@ -28,15 +32,18 @@ impl<RootTree, IntermediateTreeManager> SynchronizationManager<RootTree, Interme
             synchronization_boost_interval,
             min_synchronization_boost,
             max_synchronization_boost,
+            _phantom: std::marker::PhantomData,
         }
     }
 
-    pub async fn start_synchronization_boost(&self) {
+    pub async fn start_synchronization_boost(self: Arc<Self>) {
         let interval_ms = self.synchronization_boost_interval.as_millis() as u32;
 
+        let self_clone = Arc::clone(&self);
         let f = Closure::wrap(Box::new(move || {
+            let self_clone = Arc::clone(&self_clone);
             spawn_local(async move {
-                if let Err(e) = self.check_synchronization_boost().await {
+                if let Err(e) = self_clone.check_synchronization_boost().await {
                     log::error!("Synchronization boost error: {:?}", e);
                 }
             });
@@ -46,7 +53,7 @@ impl<RootTree, IntermediateTreeManager> SynchronizationManager<RootTree, Interme
         window
             .set_interval_with_callback_and_timeout_and_arguments_0(
                 f.as_ref().unchecked_ref(),
-                interval_ms,
+                interval_ms.try_into().unwrap(),
             )
             .expect("failed to set interval");
         f.forget();
@@ -55,7 +62,10 @@ impl<RootTree, IntermediateTreeManager> SynchronizationManager<RootTree, Interme
             wasm_bindgen_futures::JsFuture::from(js_sys::Promise::new(&mut |resolve, _| {
                 let window = web_sys::window().expect("no global window exists");
                 window
-                    .set_timeout_with_callback_and_timeout_and_arguments_0(&resolve, interval_ms)
+                    .set_timeout_with_callback_and_timeout_and_arguments_0(
+                        &resolve,
+                        interval_ms.try_into().unwrap(),
+                    )
                     .expect("failed to set timeout");
             }))
             .await
