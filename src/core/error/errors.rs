@@ -122,6 +122,13 @@ impl From<io::Error> for CellError {
     }
 }
 
+// BatteryError is a custom error type for battery-related errors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatteryError {
+    InsufficientBattery,
+    SpendingLimitExceeded,
+}
+
 #[derive(Debug)]
 pub enum ZkProofError {
     InvalidProof,

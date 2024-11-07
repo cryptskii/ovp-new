@@ -1,10 +1,13 @@
 use crate::core::error::errors::SystemError;
-use crate::core::hierarchy::root::SparseMerkleTreeR;
+
+use crate::core::types::boc::Cell;
+
 use crate::core::types::boc::BOC;
 use crate::core::zkps::circuit_builder::{Column, VirtualCell, ZkCircuitBuilder};
 use crate::core::zkps::plonky2::Plonky2System;
 use crate::core::zkps::proof::ZkProof;
 use plonky2::field::goldilocks_field::GoldilocksField;
+use plonky2::plonk::circuit_data::CircuitConfig;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
@@ -34,22 +37,21 @@ struct Node {
 
 impl SparseMerkleTreeI {
     pub fn new() -> Self {
-        let config = plonky2::plonk::config::PoseidonGoldilocksConfig::standard_recursion_config();
+        let config = CircuitConfig::standard_recursion_config();
         Self {
             circuit_builder: ZkCircuitBuilder::new(config),
-            plonky2_system: Plonky2System::new().unwrap(),
+            plonky2_system: Plonky2System::new(),
             root_hash: [0u8; 32],
             nodes: HashMap::new(),
             height: 256,
         }
     }
-
     pub fn update(&mut self, key: &[u8], value: &[u8]) -> Result<(), SystemError> {
         let leaf_hash = self.hash_leaf(key, value);
         let path = self.generate_merkle_path(key)?;
 
-        let value_cell = self.circuit_builder.add_virtual_target();
-        let key_cell = self.circuit_builder.add_virtual_target();
+        let value_cell = self.circuit_builder.add_virtual_cell();
+        let key_cell = self.circuit_builder.add_virtual_cell();
 
         self.add_path_constraints(&path, key_cell, value_cell)?;
 
@@ -59,7 +61,6 @@ impl SparseMerkleTreeI {
 
         Ok(())
     }
-
     fn add_path_constraints(
         &mut self,
         path: &[([u8; 32], bool)],
@@ -84,7 +85,7 @@ impl SparseMerkleTreeI {
             current = self.circuit_builder.poseidon(&cells);
         }
 
-        let root_cell = self.circuit_builder.add_virtual_public_input();
+        let root_cell = self.circuit_builder.add_public_input();
         self.circuit_builder
             .assert_equal(current, VirtualCell::new(root_cell));
 
@@ -129,7 +130,11 @@ impl SparseMerkleTreeI {
 
         for i in 0..self.height {
             let bit = self.get_bit(key, i);
-            let node = self.nodes.get(&current).ok_or(SystemError::NodeNotFound)?;
+            let node = self
+                .nodes
+                .get(&current)
+                .ok_or(SystemError::NodeNotFound)?
+                .clone();
 
             if bit {
                 if let Some(left) = node.left {
@@ -201,14 +206,14 @@ impl SparseMerkleTreeI {
 
     pub fn serialize_state(&self) -> Result<BOC, SystemError> {
         let mut boc = BOC::new();
-        boc.add_cell(self.root_hash.to_vec())?;
+        boc.add_cell(Cell::from_raw(self.root_hash.to_vec(), None))?;
 
         for (hash, node) in &self.nodes {
             let mut node_data = Vec::new();
             node_data.extend_from_slice(hash);
             node_data.extend_from_slice(&node.key);
             node_data.extend_from_slice(&node.value);
-            boc.add_cell(node_data)?;
+            boc.add_cell(Cell::from_raw(node_data, None))?;
         }
 
         Ok(boc)

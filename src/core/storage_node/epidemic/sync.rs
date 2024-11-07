@@ -1,6 +1,6 @@
 // ./src/core/storage_node/epidemic/sync.rs
 
-use crate::core::error::SystemError;
+use crate::core::error::{SystemError, SystemErrorType};
 use crate::core::storage_node::storage_node_contract::StorageNode;
 
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -90,7 +90,7 @@ impl<RootTree: 'static, IntermediateTreeManager: 'static>
                 .await
                 .recharge(synchronization_boost)
                 .await
-                .map_err(SystemError::from)?;
+                .map_err(|e| SystemError::new(SystemErrorType::Error, e.to_string()))?;
             self.synchronization_boost
                 .store(synchronization_boost, Ordering::Relaxed);
         }
