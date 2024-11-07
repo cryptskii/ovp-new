@@ -603,10 +603,8 @@ mod tests {
         assert!(boc.is_empty());
 
         let cell1 = Cell::with_data(vec![1, 2, 3]);
-        let cell2 = Cell::with_data(vec![4, 5, 6]);
 
         let idx1 = boc.add_cell(cell1);
-        let idx2 = boc.add_cell(cell2);
         boc.add_root(idx1);
 
         assert_eq!(boc.cell_count(), 2);
