@@ -45,6 +45,7 @@ pub enum SystemErrorType {
     InvalidAmount,
     InsufficientBalance,
     SpendingLimitExceeded,
+    BatteryError,
 }
 
 impl fmt::Display for SystemErrorType {
@@ -56,6 +57,7 @@ impl fmt::Display for SystemErrorType {
             Self::InvalidAmount => write!(f, "Invalid amount"),
             Self::InsufficientBalance => write!(f, "Insufficient balance"),
             Self::SpendingLimitExceeded => write!(f, "Spending limit exceeded"),
+            Self::BatteryError => write!(f, "Battery error"),
         }
     }
 }
