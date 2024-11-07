@@ -12,22 +12,30 @@ use std::sync::Arc;
 
 pub struct StorageAndRetrievalManager<RootTree, IntermediateTreeManager> {
     storage_node: Arc<StorageNode<RootTree, IntermediateTreeManager>>,
+    _phantom: std::marker::PhantomData<IntermediateTreeManager>,
 }
 
 impl<RootTree, IntermediateTreeManager>
     StorageAndRetrievalManager<RootTree, IntermediateTreeManager>
 {
     pub fn new(storage_node: Arc<StorageNode<RootTree, IntermediateTreeManager>>) -> Self {
-        Self { storage_node }
+        Self {
+            storage_node,
+            _phantom: std::marker::PhantomData,
+        }
     }
 
-    pub async fn store_data(&self, boc: BOC, proof: ZkProof) -> Result<(), SystemError> {
-        self.storage_node.as_ref().store_data(boc, proof).await?;
+    pub async fn store_data(&self, boc: RootTree, proof: ZkProof) -> Result<(), SystemError> {
+        self.storage_node
+            .as_ref()
+            .store_data(boc, proof)
+            .await
+            .map_err(|e| SystemError::new(SystemErrorType::StorageError, e.to_string()))?;
         Ok(())
     }
 
     pub async fn retrieve_data(&self, boc_id: &[u8; 32]) -> Result<BOC, SystemError> {
-        self.storage_node.as_ref().retrieve_data(boc_id).await
+        self.storage_node.as_ref().retrieve_boc(boc_id).await
     }
 
     pub async fn retrieve_proof(&self, proof_id: &[u8; 32]) -> Result<ZkProof, SystemError> {
