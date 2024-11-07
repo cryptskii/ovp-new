@@ -1,7 +1,7 @@
 // ./src/core/hierarchy/intermediate/mod.rs
 
 // src/core/hierarchy/intermediate/mod.rs
-pub mod aggregation;
+
 pub mod destination_contract;
 pub mod intermediate_contract;
 
