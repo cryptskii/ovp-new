@@ -279,6 +279,42 @@ impl TryFrom<u8> for WalletOpCode {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[repr(u8)]
+pub enum WalletExtensionStateChangeOp {
+    CreateChannel = 0x70,
+    UpdateChannel = 0x71,
+    CloseChannel = 0x72,
+    ValidateChannel = 0x73,
+    ProcessChannel = 0x74,
+    ValidateTransaction = 0x80,
+    ProcessTransaction = 0x81,
+    FinalizeState = 0x82,
+}
+
+impl From<WalletExtensionStateChangeOp> for u8 {
+    fn from(code: WalletExtensionStateChangeOp) -> Self {
+        code as u8
+    }
+}
+impl TryFrom<u8> for WalletExtensionStateChangeOp {
+    type Error = &'static str;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        match value {
+            0x70 => Ok(Self::CreateChannel),
+            0x71 => Ok(Self::UpdateChannel),
+            0x72 => Ok(Self::CloseChannel),
+            0x73 => Ok(Self::ValidateChannel),
+            0x74 => Ok(Self::ProcessChannel),
+            0x80 => Ok(Self::ValidateTransaction),
+            0x81 => Ok(Self::ProcessTransaction),
+            0x82 => Ok(Self::FinalizeState),
+            _ => Err("Invalid WalletExtensionStateChangeOp operation code"),
+        }
+    }
+}
+
 impl TryFrom<u8> for IntermediateOpCode {
     type Error = &'static str;
 

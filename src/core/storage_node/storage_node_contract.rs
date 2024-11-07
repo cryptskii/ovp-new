@@ -1,9 +1,8 @@
-use crate::core::epidemic_protocol::EpidemicProtocol;
 use crate::core::error::errors::SystemErrorType;
 use crate::core::error::SystemError;
-use crate::core::hierarchy::intermediate::intermediate_tree_manager::IntermediateTreeManager;
-use crate::core::hierarchy::root::sparse_merkle_tree_r::SparseMerkleTreeR;
+
 use crate::core::storage_node::battery::BatteryChargingSystem;
+
 use crate::core::types::boc::BOC;
 use crate::core::zkps::proof::ZkProof;
 use anyhow::Result;
@@ -11,26 +10,6 @@ use futures::lock::Mutex;
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
-
-// Custom types for compatibility with your application structure
-
-type RootTree = SparseMerkleTreeR;
-impl ZkProof {
-    pub fn verify_parameters(&self) -> bool {
-        // Implement verification logic
-        true
-    }
-
-    pub fn verify_commitment(&self, hash: &[u8; 32]) -> bool {
-        // Implement commitment verification logic
-        &self.commitment == hash
-    }
-
-    pub fn verify(&self) -> Result<bool, SystemError> {
-        // Implement your verification logic here
-        Ok(true)
-    }
-}
 
 // Configuration settings for StorageNode
 #[derive(Clone)]
@@ -114,7 +93,10 @@ impl<RootTree, IntermediateTree> StorageNode<RootTree, IntermediateTree> {
     // Store an update, including BOC and proof, in an async-compatible function
     pub async fn store_update(&self, boc: BOC, proof: ZkProof) -> Result<(), SystemError> {
         let mut battery_system = self.battery_system.lock().await;
-        battery_system.charge_for_processing()?;
+        battery_system
+            .charge_for_processing()
+            .await
+            .map_err(|e| SystemError::new(SystemErrorType::BatteryError, e.to_string()))?;
 
         if !self.verify_proof_internal(&proof, &boc)? {
             return Err(SystemError::new(
@@ -141,25 +123,24 @@ impl<RootTree, IntermediateTree> StorageNode<RootTree, IntermediateTree> {
         }
 
         let mut epidemic_protocol = self.epidemic_protocol.lock().await;
-        epidemic_protocol.propagate_update(boc, proof)?;
+        epidemic_protocol
+            .propagate_update(boc, proof)
+            .map_err(|e| SystemError::new(SystemErrorType::EpidemicProtocolError, e.to_string()))?;
 
         Ok(())
     }
 
     pub async fn retrieve_boc(&self, boc_id: &[u8; 32]) -> Result<BOC, SystemError> {
         let bocs = self.stored_bocs.lock().await;
-        bocs.get(boc_id).cloned().ok_or_else(|| {
-            SystemError::new(SystemErrorType::BocNotFound, "BOC not found".to_string())
-        })
+        bocs.get(boc_id)
+            .cloned()
+            .ok_or_else(|| SystemError::new(SystemErrorType::NotFound, "BOC not found".to_string()))
     }
 
     pub async fn retrieve_proof(&self, proof_id: &[u8; 32]) -> Result<ZkProof, SystemError> {
         let proofs = self.stored_proofs.lock().await;
         proofs.get(proof_id).cloned().ok_or_else(|| {
-            SystemError::new(
-                SystemErrorType::ProofNotFound,
-                "Proof not found".to_string(),
-            )
+            SystemError::new(SystemErrorType::NotFound, "Proof not found".to_string())
         })
     }
 

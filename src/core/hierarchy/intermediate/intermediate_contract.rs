@@ -1,4 +1,5 @@
 use crate::core::error::errors::SystemError;
+use crate::core::hierarchy::client::wallet_extension::wallet_extension_contract::WalletStateUpdate;
 use crate::core::hierarchy::intermediate::destination_contract::DestinationContract;
 use crate::core::hierarchy::intermediate::sparse_merkle_tree_i::SparseMerkleTreeI;
 use crate::core::storage_node::storage_node_contract::{StorageNode, StorageNodeConfig};
@@ -9,7 +10,15 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::time::{Duration, SystemTime};
 
 #[derive(Debug)]
-pub struct IntermediateContract {
+pub struct IntermediateContract<WalletRootState> {
+    pub wallet_states: HashMap<String, WalletRootState>,
+    pub pending_updates: HashMap<String, Vec<WalletStateUpdate>>,
+    pub pending_channels: HashMap<String, ChannelRequest>,
+    pub closing_channels: HashMap<String, ChannelClosureRequest>,
+    pub rebalance_queue: VecDeque<RebalanceRequest>,
+    // ... other fields ...
+}
+pub struct IntermediateContract<WalletRootState> {
     pub wallet_states: HashMap<String, WalletRootState>,
     pub pending_updates: HashMap<String, Vec<WalletStateUpdate>>,
     pub pending_channels: HashMap<String, ChannelRequest>,

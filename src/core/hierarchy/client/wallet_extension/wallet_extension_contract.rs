@@ -2,6 +2,9 @@ use crate::core::error::errors::Error;
 use crate::core::error::SystemError;
 use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
 use crate::core::types::boc::BOC;
+use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::{
+    WalletExtension, WalletExtensionState, WalletExtensionStateChange, WalletExtensionStateChangeOp,
+};
 use crate::core::types::ovp_ops::WalletOpCode;
 use crate::core::zkps::plonky2::Plonky2SystemHandle;
 use crate::core::zkps::proof::ZkProof;
@@ -14,6 +17,8 @@ use std::convert::TryFrom;
 use std::sync::{Arc, RwLock};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
+
+
 
 #[wasm_bindgen(typescript_custom_section)]
 const TS_APPEND_CONTENT: &'static str = r#"
@@ -55,7 +60,14 @@ impl ByteArray32 {
 #[wasm_bindgen]
 pub struct WalletExtension {
     wallet_id: ByteArray32,
-    channels: HashMap<[u8; 32], Arc<RwLock<Channel>>>,
+    channels: HashMap<
+        [u8; 32],
+        Arc<
+            RwLock<
+                crate::core::hierarchy::client::wallet_extension::wallet_extension_types::Channel,
+            >,
+        >,
+    >,
     total_locked_balance: u64,
     rebalance_config: RebalanceConfig,
     proof_system: Arc<Plonky2SystemHandle>,
@@ -64,7 +76,6 @@ pub struct WalletExtension {
     balance_tracker: WalletBalanceTracker,
     root_tracker: RootStateTracker,
 }
-
 #[wasm_bindgen]
 impl WalletExtension {
     #[wasm_bindgen(constructor)]
@@ -108,48 +119,96 @@ impl WalletExtension {
         let params_vec = params.to_vec();
         let mut wallet_extension = self.clone();
 
-        future_to_promise(async move {
+        future_to_promise(async move {  
             let op_code = WalletOpCode::try_from(op_code)
-                .map_err(|_| JsValue::from_str("Invalid operation code"))?;
-
-            match op_code {
+            .map_err(|_| JsValue::from_str("Invalid operation code"))?;
+        match op_code {
                 WalletOpCode::CreateChannel => {
                     let params: CreateChannelParams =
                         bincode::deserialize(&params_vec).map_err(|e| {
                             JsValue::from_str(&format!("Failed to deserialize params: {:?}", e))
                         })?;
-                    let channel_id =
-                        wallet_extension.create_channel(params).await.map_err(|e| {
-                            JsValue::from_str(&format!("Failed to create channel: {:?}", e))
-                        })?;
-                    Ok(Uint8Array::from(&channel_id[..]).into())
+                    wallet_extension.create_channel(params).await.map_err(|e| {
+                        JsValue::from_str(&format!("Failed to create channel: {:?}", e))
+                    })?;
                 }
-                WalletOpCode::UpdateChannel => {
-                    let (channel_id_bytes, update): ([u8; 32], ChannelUpdate) =
+                WalletOpCode::Deposit => {
+                    let params: DepositParams =
                         bincode::deserialize(&params_vec).map_err(|e| {
                             JsValue::from_str(&format!("Failed to deserialize params: {:?}", e))
                         })?;
-                    let channel_id = ByteArray32(channel_id_bytes);
+                    wallet_extension.deposit(params).await.map_err(|e| {
+                        JsValue::from_str(&format!("Failed to deposit: {:?}", e))
+                        })?;
+                }
+                WalletOpCode::Withdraw => {
+                    let params: WithdrawParams =
+                        bincode::deserialize(&params_vec).map_err(|e| {
+                            JsValue::from_str(&format!("Failed to deserialize params: {:?}", e))
+                        })?;
+                    wallet_extension.withdraw(params).await.map_err(|e| {
+                        JsValue::from_str(&format!("Failed to withdraw: {:?}", e))
+                    })?;
+                }
+                WalletOpCode::UpdateChannel => {
+                    let (channel_id, update): (ChannelId, ChannelUpdate) =
+                        bincode::deserialize(&params_vec).map_err(|e| {
+                            JsValue::from_str(&format!("Failed to deserialize params: {:?}", e))
+                        })?;
                     wallet_extension
                         .update_channel(&channel_id.0, update)
                         .await
                         .map_err(|e| {
-                            JsValue::from_str(&format!("Channel update failed: {:?}", e))
+                            JsValue::from_str(&format!("Failed to update channel: {:?}", e))
                         })?;
-                    Ok(JsValue::null())
+                }
+                WalletOpCode::CloseChannel => {
+                    let closure_params: ChannelClosureParams = bincode::deserialize(&params_vec)
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to deserialize params: {:?}", e))
+                        })?;
+                    wallet_extension
+                        .close_channel(closure_params)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to close channel: {:?}", e))
+                        })?;
+                }
+                WalletOpCode::ValidateChannel => {
+                    let validation_params: ChannelValidationParams =
+                        bincode::deserialize(&params_vec).map_err(|e| {
+                            JsValue::from_str(&format!("Failed to deserialize params: {:?}", e))
+                        })?;
+                    wallet_extension
+                        .validate_channel(validation_params)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to validate channel: {:?}", e))
+                        })?;
                 }
                 WalletOpCode::UpdateWalletState => {
                     let new_state: WalletStateUpdate =
                         bincode::deserialize(&params_vec).map_err(|e| {
-                            JsValue::from_str(&format!("Failed to deserialize new state: {:?}", e))
+                            JsValue::from_str(&format!("Failed to deserialize params: {:?}", e))
                         })?;
-                    let state_boc = wallet_extension
+                    wallet_extension
                         .update_wallet_state(new_state)
                         .await
-                        .map_err(|e| JsValue::from_str(&format!("State update failed: {:?}", e)))?;
-                    Ok(JsValue::from(Uint8Array::from(
-                        &state_boc.serialize().unwrap()[..],
-                    )))
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to update wallet state: {:?}", e))
+                        })?;
+                }
+                WalletOpCode::ValidateWalletState => {
+                    let validation_params: WalletStateValidationParams =
+                        bincode::deserialize(&params_vec).map_err(|e| {
+                            JsValue::from_str(&format!("Failed to deserialize params: {:?}", e))
+                        })?;
+                    wallet_extension
+                        .validate_wallet_state(validation_params)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to validate wallet state: {:?}", e))
+                        })?;
                 }
                 WalletOpCode::UpdateBalance => {
                     let (amount, proof_bytes): (u64, Vec<u8>) = bincode::deserialize(&params_vec)
@@ -161,9 +220,20 @@ impl WalletExtension {
                         .update_balance(amount, proof)
                         .await
                         .map_err(|e| {
-                            JsValue::from_str(&format!("Balance update failed: {:?}", e))
+                            JsValue::from_str(&format!("Failed to update balance: {:?}", e))
                         })?;
-                    Ok(JsValue::null())
+                }
+                WalletOpCode::ValidateBalance => {
+                    let validation_params: BalanceValidationParams =
+                        bincode::deserialize(&params_vec).map_err(|e| {
+                            JsValue::from_str(&format!("Failed to deserialize params: {:?}", e))
+                        })?;
+                    wallet_extension
+                        .validate_balance(validation_params)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to validate balance: {:?}", e))
+                        })?;
                 }
                 WalletOpCode::CreateTransaction => {
                     let tx_request: TransactionRequest = bincode::deserialize(&params_vec)
@@ -177,20 +247,56 @@ impl WalletExtension {
                         .create_transaction(tx_request)
                         .await
                         .map_err(|e| {
-                        JsValue::from_str(&format!("Transaction creation failed: {:?}", e))
+                        JsValue::from_str(&format!("Failed to create transaction: {:?}", e))
                     })?;
                     Ok(JsValue::from(Uint8Array::from(
                         &tx.serialize().unwrap()[..],
                     )))
                 }
-                WalletOpCode::GenerateWalletProof => {
-                    let proof_request: ProofRequest =
+                WalletOpCode::ValidateTransaction => {
+                    let validation_params: TransactionValidationParams =
                         bincode::deserialize(&params_vec).map_err(|e| {
                             JsValue::from_str(&format!(
-                                "Failed to deserialize proof request: {:?}",
+                                "Failed to deserialize validation params: {:?}",
                                 e
                             ))
                         })?;
+                    let is_valid = wallet_extension
+                        .validate_transaction(validation_params)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Transaction validation failed: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_bool(is_valid))
+                }
+                WalletOpCode::ProcessTransaction => {
+                    let process_params: TransactionProcessParams =
+                        bincode::deserialize(&params_vec).map_err(|e| {
+                            JsValue::from_str(&format!(
+                                "Failed to deserialize process params: {:?}",
+                                e
+                            ))
+                        })?;
+                    wallet_extension
+                        .process_transaction(process_params)
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to process transaction: {:?}", e))
+                        })?;
+                    Ok(JsValue::null())
+                }
+          
+                WalletOpCode::GenerateWalletProof => {
+                    let proof_request: crate::core::hierarchy::client::wallet_extension::wallet_extension_types::ProofRequest =
+                            JsValue::from_str(&format!(
+                                "Failed to deserialize proof request: {:?}",
+                                e,                            ))
+                                .map_err(|e| {
+                                    JsValue::from_str(&format!(
+                                        "Failed to deserialize proof request: {:?}",
+                                        e
+                                    ))
+                                })?;
                     let proof = wallet_extension
                         .generate_wallet_proof(proof_request)
                         .await
@@ -200,70 +306,150 @@ impl WalletExtension {
                     Ok(JsValue::from(Uint8Array::from(&proof.serialize()?[..])))
                 }
                 WalletOpCode::VerifyWalletProof => {
-                    let (proof, statement): (ZkProof, ProofStatement) =
-                        bincode::deserialize(&params_vec).map_err(|e| {
+                    let (proof, statement): (ZkProof, crate::core::hierarchy::client::wallet_extension::wallet_extension_types::ProofStatement) =
+                        bincode::deserialize(¶ms_vec).map_err(|e| {
                             JsValue::from_str(&format!(
-                                "Failed to deserialize proof verification request: {:?}",
+                                "Failed to deserialize proof request: {:?}",
                                 e
                             ))
                         })?;
-                    let is_valid = wallet_extension
-                        .verify_proof(proof, statement)
+                    let verified = wallet_extension
+                        .verify_wallet_proof(proof, statement)
                         .await
                         .map_err(|e| {
-                            JsValue::from_str(&format!("Proof verification failed: {:?}", e))
+                            JsValue::from_str(&format!("Failed to verify proof: {:?}", e))
                         })?;
-                    Ok(JsValue::from_bool(is_valid))
+                    Ok(JsValue::from_bool(verified))
                 }
-                WalletOpCode::CloseChannel => {
-                    let closure_params: ChannelClosureParams = bincode::deserialize(&params_vec)
-                        .map_err(|e| {
-                            JsValue::from_str(&format!(
-                                "Failed to deserialize closure params: {:?}",
-                                e
-                            ))
-                        })?;
-                    wallet_extension
-                        .close_channel(closure_params)
+                WalletOpCode::GetChannelId => {
+                    let channel_id = wallet_extension
+                        .get_channel_id()
                         .await
                         .map_err(|e| {
-                            JsValue::from_str(&format!("Channel closure failed: {:?}", e))
+                            JsValue::from_str(&format!("Failed to get channel id: {:?}", e))
                         })?;
-                    Ok(JsValue::null())
+                    Ok(JsValue::from_str(&format!("{}", channel_id)))
                 }
-                WalletOpCode::ValidateChannel => {
-                    let validation_params: ChannelValidationParams =
-                        bincode::deserialize(&params_vec).map_err(|e| {
-                            JsValue::from_str(&format!(
-                                "Failed to deserialize validation params: {:?}",
-                                e
-                            ))
-                        })?;
-                    let is_valid = wallet_extension
-                        .validate_channel(validation_params)
+                WalletOpCode::GetChannelBalance => {
+                    let balance = wallet_extension
+                        .get_channel_balance()
                         .await
                         .map_err(|e| {
-                            JsValue::from_str(&format!("Channel validation failed: {:?}", e))
+                            JsValue::from_str(&format!("Failed to get channel balance: {:?}", e))
                         })?;
-                    Ok(JsValue::from_bool(is_valid))
+                    Ok(JsValue::from_str(&format!("{}", balance)))
                 }
-                WalletOpCode::UpdateWalletTree => {
-                    let tree_update: WalletTreeUpdate =
-                        bincode::deserialize(&params_vec).map_err(|e| {
-                            JsValue::from_str(&format!(
-                                "Failed to deserialize tree update: {:?}",
-                                e
-                            ))
-                        })?;
-                    wallet_extension
-                        .update_wallet_tree(tree_update)
+                WalletOpCode::GetChannelState => {
+                    let channel_state = wallet_extension
+                        .get_channel_state()
                         .await
-                        .map_err(|e| JsValue::from_str(&format!("Tree update failed: {:?}", e)))?;
-                    Ok(JsValue::null())
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to get channel state: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_str(&format!("{}", channel_state)))
+                }                
+                WalletOpCode::GetChannelMerkleProof => {
+                    let channel_merkle_proof = wallet_extension
+                        .get_channel_merkle_proof()
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to get channel merkle proof: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_str(&format!("{}", channel_merkle_proof))) 
+                }
+                WalletOpCode::GetChannelMerkleRoot => {
+                    let channel_merkle_root = wallet_extension
+                        .get_channel_merkle_root()
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to get channel merkle root: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_str(&format!("{}", channel_merkle_root))) 
+                }
+                WalletOpCode::GetChannelProof => {
+                    let channel_proof = wallet_extension
+                        .get_channel_proof()
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to get channel proof: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_str(&format!("{}", channel_proof))) 
+                }
+                WalletOpCode::GetChannelSignature => {
+                    let channel_signature = wallet_extension
+                        .get_channel_signature()
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to get channel signature: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_str(&format!("{}", channel_signature))) 
+                }
+                WalletOpCode::GetChannelPublicKey => {
+                    let channel_public_key = wallet_extension
+                        .get_channel_public_key()
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to get channel public key: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_str(&format!("{}", channel_public_key))) 
+                }
+                WalletOpCode::GetChannelAddress => {
+                    let channel_address = wallet_extension
+                        .get_channel_address()
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to get channel address: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_str(&format!("{}", channel_address))) 
+                }
+                WalletOpCode::GetChannelNonce => {
+                    let channel_nonce = wallet_extension
+                        .get_channel_nonce()
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to get channel nonce: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_str(&format!("{}", channel_nonce))) 
+                }
+                WalletOpCode::GetChannelSequenceNumber => {
+                    let channel_sequence_number = wallet_extension
+                        .get_channel_sequence_number()
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to get channel sequence number: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_str(&format!("{}", channel_sequence_number))) 
+                }
+                WalletOpCode::GetChannelTimeout => {
+                    let channel_timeout = wallet_extension
+                        .get_channel_timeout()
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to get channel timeout: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_str(&format!("{}", channel_timeout))) 
+                }
+                WalletOpCode::GetChannelConfig => {
+                    let channel_config = wallet_extension
+                        .get_channel_config()
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to get channel config: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_str(&format!("{}", channel_config))) 
+                }
+                WalletOpCode::GetChannelStateHash => {
+                    let channel_state_hash = wallet_extension
+                        .get_channel_state_hash()
+                        .await
+                        .map_err(|e| {
+                            JsValue::from_str(&format!("Failed to get channel state hash: {:?}", e))
+                        })?;
+                    Ok(JsValue::from_str(&format!("{}", channel_state_hash))) 
                 }
                 WalletOpCode::SyncState => {
                     let sync_params: StateSyncParams =
-                        bincode::deserialize(&params_vec).map_err(|e| {
+                        bincode::deserialize(¶ms_vec).map_err(|e| {
                             JsValue::from_str(&format!(
                                 "Failed to deserialize sync params: {:?}",
                                 e
@@ -276,7 +462,7 @@ impl WalletExtension {
                     Ok(JsValue::null())
                 }
                 WalletOpCode::RebalanceChannel => {
-                    let rebalance_params: RebalanceParams = bincode::deserialize(&params_vec)
+                    let rebalance_params: RebalanceParams = bincode::deserialize(¶ms_vec)
                         .map_err(|e| {
                             JsValue::from_str(&format!(
                                 "Failed to deserialize rebalance params: {:?}",
@@ -293,7 +479,7 @@ impl WalletExtension {
                 }
                 WalletOpCode::DisputeState => {
                     let dispute_params: DisputeParams =
-                        bincode::deserialize(&params_vec).map_err(|e| {
+                        bincode::deserialize(¶ms_vec).map_err(|e| {
                             JsValue::from_str(&format!(
                                 "Failed to deserialize dispute params: {:?}",
                                 e
@@ -308,7 +494,7 @@ impl WalletExtension {
                     Ok(JsValue::null())
                 }
                 WalletOpCode::FinalizeState => {
-                    let finalize_params: FinalizeStateParams = bincode::deserialize(&params_vec)
+                    let finalize_params: FinalizeStateParams = bincode::deserialize(¶ms_vec)
                         .map_err(|e| {
                             JsValue::from_str(&format!(
                                 "Failed to deserialize finalize params: {:?}",
@@ -327,7 +513,6 @@ impl WalletExtension {
         })
     }
 }
-
 // Helper functions
 fn generate_channel_id(wallet_id: &[u8; 32], counterparty: &[u8; 32]) -> Result<[u8; 32], Error> {
     let mut hasher = Sha256::new();

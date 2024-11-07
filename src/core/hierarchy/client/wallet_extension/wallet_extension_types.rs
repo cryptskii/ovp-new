@@ -92,6 +92,13 @@ impl fmt::Debug for WalletExtension {
     }
 }
 
+pub struct WalletExtensionStateChange {
+    pub op: WalletExtensionStateChangeOp,
+    pub channel_id: [u8; 32],
+    pub wallet_id: [u8; 32],
+    pub state: WalletExtensionState,
+}
+#[derive(Debug, Clone)]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Channel {
     pub channel_id: [u8; 32],

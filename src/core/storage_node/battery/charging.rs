@@ -16,7 +16,7 @@ impl BatteryChargingSystem {
     pub fn new(config: StorageNodeConfig, stake_amount: u64) -> Self {
         let now = window().unwrap().performance().unwrap().now() as u64;
         Self {
-            battery_level: AtomicU64::new(config.battery_config.max_battery),
+            battery_level: AtomicU64::new(config.battery_config.max_capacity),
             config,
             last_charge_time: AtomicU64::new(now),
             reward_multiplier: AtomicU64::new(100),
@@ -26,16 +26,16 @@ impl BatteryChargingSystem {
 
     pub async fn charge_for_processing(&self) -> Result<(), SystemErrorType> {
         let current_level = self.battery_level.load(Ordering::Acquire);
-        if current_level < self.config.battery_config.minimum_battery {
+        if current_level < self.config.battery_config.min_capacity {
             return Err(SystemErrorType::InsufficientBalance);
         }
         let now = window().unwrap().performance().unwrap().now() as u64;
         let last_charge = self.last_charge_time.load(Ordering::Acquire);
-        if now - last_charge < self.config.battery_config.charge_cooldown {
+        if now - last_charge < self.config.battery_config.cooldown_period {
             return Err(SystemErrorType::SpendingLimitExceeded);
         }
         self.battery_level
-            .fetch_sub(self.config.battery_config.discharge_rate, Ordering::Release);
+            .fetch_sub(self.config.battery_config.usage_rate, Ordering::Release);
         self.update_reward_multiplier();
         Ok(())
     }
@@ -44,19 +44,19 @@ impl BatteryChargingSystem {
         let now = window().unwrap().performance().unwrap().now() as u64;
 
         let last_charge = self.last_charge_time.load(Ordering::Acquire);
-        if now - last_charge < self.config.battery_config.charge_cooldown {
+        if now - last_charge < self.config.battery_config.cooldown_period {
             return Err(SystemErrorType::SpendingLimitExceeded);
         }
 
         let current_level = self.battery_level.load(Ordering::Acquire);
 
-        if current_level >= self.config.battery_config.max_battery {
+        if current_level >= self.config.battery_config.max_capacity {
             return Ok(());
         }
 
-        let charge_rate = self.config.battery_config.charge_rate * synchronized_nodes;
+        let charge_rate = self.config.battery_config.recharge_rate * synchronized_nodes;
         let new_level = current_level.saturating_add(charge_rate);
-        let capped_level = new_level.min(self.config.battery_config.max_battery);
+        let capped_level = new_level.min(self.config.battery_config.max_capacity);
 
         self.battery_level.store(capped_level, Ordering::Release);
         self.last_charge_time.store(now, Ordering::Release);
@@ -78,14 +78,14 @@ impl BatteryChargingSystem {
 
     pub fn get_charge_percentage(&self) -> f64 {
         let current_level = self.battery_level.load(Ordering::Relaxed);
-        (current_level as f64 / self.config.battery_config.max_battery as f64) * 100.0
+        (current_level as f64 / self.config.battery_config.max_capacity as f64) * 100.0
     }
 
     pub async fn wait_for_sufficient_charge(&self) -> Result<(), SystemErrorType> {
         let mut attempts = 0;
 
-        while self.battery_level.load(Ordering::Acquire) < self.config.battery_config.min_battery {
-            if attempts >= self.config.battery_config.max_charge_attempts {
+        while self.battery_level.load(Ordering::Acquire) < self.config.battery_config.min_capacity {
+            if attempts >= self.config.battery_config.max_recharge_attempts {
                 return Err(SystemErrorType::SpendingLimitExceeded);
             }
             if self.battery_level.load(Ordering::Acquire) == 0 {
@@ -96,7 +96,7 @@ impl BatteryChargingSystem {
                     .unwrap()
                     .set_timeout_with_callback_and_timeout_and_arguments_0(
                         &resolve,
-                        self.config.battery_config.charge_wait_ms as i32,
+                        self.config.battery_config.recharge_wait_time as i32,
                     )
                     .unwrap();
             });
