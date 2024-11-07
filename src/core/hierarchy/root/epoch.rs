@@ -2,6 +2,11 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
+pub enum EpochStatus {
+    Active,
+    Completed,
+}
+
 pub struct Epoch {
     pub epoch_number: u64,
     pub start_time: u64,
@@ -17,13 +22,14 @@ impl Epoch {
             epoch_number,
             start_time,
             end_time: 0,
-            state: EpochStatus::new(epoch_number),
+            state: EpochStatus::Active,
         }
     }
 
     /// Ends the current epoch.
     pub fn end_epoch(&mut self) {
         self.end_time = current_timestamp();
+        self.state = EpochStatus::Completed;
         // Additional logic for finalizing the epoch
     }
 }

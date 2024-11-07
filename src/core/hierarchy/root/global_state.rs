@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 #[derive(Clone)]
-pub struct GlobalState {
+pub struct GlobalState<StateTransitionRecord> {
     pub root_hash: [u8; 32],
     pub epoch_number: u64,
     pub accounts: HashMap<String, AccountState>,
@@ -18,7 +18,14 @@ pub struct AccountState {
     pub nonce: u64,
 }
 
-impl GlobalState {
+pub struct StateTransitionRecord {
+    pub epoch_id: u64,
+    pub root_hash: [u8; 32],
+    pub affected_wallet_ids: Vec<[u8; 32]>,
+    pub timestamp: u64,
+}
+
+impl<StateTransitionRecord> GlobalState<StateTransitionRecord> {
     /// Creates a new global state.
     pub fn new(root_hash: [u8; 32], epoch_number: u64) -> Self {
         Self {

@@ -1,5 +1,7 @@
 // src/core/global/intermediate_verifier.rs
 
+use crate::core::hierarchy::client::wallet_extension::balance::ZkProof;
+
 #[derive(Debug)]
 pub enum VerificationError {
     InvalidProof,
