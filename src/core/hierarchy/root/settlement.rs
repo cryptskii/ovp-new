@@ -1,9 +1,7 @@
 // src/core/hierarchy/root/settlement.rs
 
 use crate::core::types::ovp_ops::RootOpCode;
-use crate::core::types::ovp_types::EpochStatus;
-use crate::core::types::ovp_types::GlobalState;
-use crate::core::types::ovp_types::SystemError;
+
 use merkle::Proof as MerkleProof;
 
 use super::root_contract::RootContract;
