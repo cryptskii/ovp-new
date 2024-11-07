@@ -33,12 +33,11 @@ impl<RootTree, IntermediateTreeManager> ReplicationManager<RootTree, Intermediat
             replication_interval.as_secs() as u32,
         );
 
-        let consistency_manager = ReplicationConsistencyManager {
-            storage_node: storage_node.clone(),
-            response_threshold,
-
-            response_interval: response_interval.as_secs() as u32,
-        };
+        let consistency_manager = ReplicationConsistencyManager::new(
+            storage_node.clone(),
+            replication_threshold,
+            replication_interval,
+        );
 
         let verification_manager = ReplicationVerificationManager::new(
             storage_node.clone(),

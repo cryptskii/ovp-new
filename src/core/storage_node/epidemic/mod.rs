@@ -8,7 +8,7 @@ pub use propagation::BatteryPropagation;
 pub use sync::SynchronizationManager;
 
 use crate::core::storage_node::storage_node_contract::StorageNode;
-use crate::core::types::EpidemicProtocol;
+
 use std::sync::{Arc, RwLock};
 
 impl<K, V, RootTree, IntermediateTreeManager>
@@ -19,7 +19,7 @@ impl<K, V, RootTree, IntermediateTreeManager>
         synchronization_manager: Arc<
             RwLock<SynchronizationManager<RootTree, IntermediateTreeManager>>,
         >,
-        battery_propagation: Arc<RwLock<BatteryPropagation<RootTree, IntermediateTreeManager>>>,
+        battery_propagation: Arc<RwLock<BatteryPropagation<RootTree>>>,
         redundancy_factor: f64,
         propagation_probability: f64,
     ) -> Self {
@@ -213,4 +213,3 @@ impl<K, V> StorageNode<K, V> {
         0
     }
 }
-
