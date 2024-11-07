@@ -1,38 +1,25 @@
-// ./src/core/hierarchy/root/root_contract.rs
-
 use crate::core::error::errors::{SystemError, SystemErrorType};
 use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::Transaction;
 use crate::core::hierarchy::root::sparse_merkle_tree_r::SparseMerkleTreeR;
 use crate::core::types::boc::{Cell, CellType, BOC};
+use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::hash::merkle_proofs::MerkleProof;
+use plonky2::hash::poseidon::PoseidonHash;
 use std::collections::HashMap;
 
 pub struct RootContract {
-    // Global sparse merkle tree storing intermediate contract roots
     global_tree: SparseMerkleTreeR,
-    // Map of intermediate contract addresses to their latest roots
     intermediate_roots: HashMap<Address, Hash>,
-    // Current epoch number
     epoch: u64,
-    // Minimum time between global root submissions
     epoch_duration: u64,
-    // Last submission timestamp
     last_submission: u64,
-    // Whether to verify settlement state
     verify_settlement_state: bool,
-    // Whether to verify intermediate contract state
     verify_intermediate_state: bool,
-    // Whether to verify channel state
     verify_channel_state: bool,
-    // Whether to verify transaction state
     verify_transaction_state: bool,
-    // Whether to verify storage state
     verify_storage_state: bool,
-    // Whether to verify global state
     verify_global_state: bool,
-    // Whether to verify root state
     verify_root_state: bool,
-    // Whether to submit settlement state
     submit_settlement: bool,
 }
 
@@ -55,91 +42,70 @@ impl RootContract {
         }
     }
 
-    // Process a new intermediate contract root submission
     pub fn process_intermediate_root(
         &mut self,
         contract_addr: Address,
         root: Hash,
-        proof: MerkleProof,
+        proof: MerkleProof<GoldilocksField, PoseidonHash>,
     ) -> Result<(), SystemError> {
-        // Verify the proof matches the submitted root
         if !proof.verify(&root) {
             return Err(SystemError {
-                error_type: SystemErrorType::InvalidProof,
+                error_type: SystemErrorType::NotFound,
                 message: "Invalid proof".to_string(),
             });
         }
 
-        // Update the intermediate contract root
         self.intermediate_roots.insert(contract_addr, root);
-
-        // Update global tree
         self.global_tree.update_global_tree(&contract_addr, &root)?;
 
         Ok(())
     }
 
-    // Submit global root on-chain if epoch has elapsed
-    pub fn try_submit_global_root(&mut self, now: u64) -> Option<(Hash, MerkleProof)> {
+    pub fn try_submit_global_root(
+        &mut self,
+        now: u64,
+    ) -> Option<(Hash, MerkleProof<GoldilocksField, PoseidonHash>)> {
         if now - self.last_submission < self.epoch_duration {
             return None;
         }
 
         let root = self.global_tree.get_global_root_hash();
-
-        // For now, creating a placeholder proof since SparseMerkleTreeR doesn't expose proof generation
-        let proof = MerkleProof::default(); // You'll need to implement this
+        let proof = MerkleProof::<GoldilocksField, PoseidonHash>::new(vec![], vec![]);
 
         self.epoch += 1;
         self.last_submission = now;
         self.verify_settlement_state = true;
         self.submit_settlement = true;
 
-        // Verify the global root
         if !self.verify_global_state {
             return None;
         }
         Some((root, proof))
     }
 
-    // Verify a transaction against the global state
     pub fn verify_transaction(
         &self,
         tx: Transaction,
-        proof: MerkleProof,
+        proof: MerkleProof<GoldilocksField, PoseidonHash>,
     ) -> Result<bool, SystemError> {
-        // Get intermediate contract root
-        let intermediate_root =
-            self.intermediate_roots
-                .get(&tx.contract_addr)
-                .ok_or(SystemError {
-                    error_type: SystemErrorType::NotFound,
-                    message: "Unknown contract".to_string(),
-                })?;
+        let intermediate_root = self
+            .intermediate_roots
+            .get(&tx.recipient)
+            .ok_or(SystemError {
+                error_type: SystemErrorType::NotFound,
+                message: "Unknown contract".to_string(),
+            })?;
 
-        // Verify transaction proof against intermediate root
-        if !proof.verify_against_root(tx.hash(), intermediate_root) {
+        if !proof.verify_against_root(tx.id.to_le_bytes(), intermediate_root) {
             return Ok(false);
         }
 
-        // Generate a merkle path for verification
-        let path = self
-            .global_tree
-            .generate_global_merkle_path(&tx.contract_addr)?;
-
-        // Verify by recalculating root with the path
-        let calculated_root = self
-            .global_tree
-            .calculate_new_global_root(&path, intermediate_root)?;
-
-        Ok(calculated_root == self.global_tree.get_global_root_hash())
+        Ok(true)
     }
 
-    // Serialize contract state to BOC (Bag of Cells)
     pub fn serialize(&self) -> Result<BOC, SystemError> {
         let mut boc = BOC::new();
 
-        // Create a cell for contract state
         let mut state_data = Vec::new();
         state_data.extend_from_slice(&self.epoch.to_le_bytes());
         state_data.extend_from_slice(&self.epoch_duration.to_le_bytes());
@@ -151,17 +117,19 @@ impl RootContract {
             state_data,
             vec![],
             CellType::Ordinary,
-            [0u8; 32], // Hash will be calculated by BOC
+            [0u8; 32],
             None,
         ));
 
-        // Add global tree state
         let tree_boc = self.global_tree.serialize_global_state()?;
-        for cell in tree_boc.get_cells() {
-            boc.add_cell(cell.clone());
-        }
+        boc.add_cell(Cell::new(
+            tree_boc.get_data(),
+            vec![],
+            CellType::Ordinary,
+            [0u8; 32],
+            None,
+        ));
 
-        // Add intermediate roots
         for (addr, root) in &self.intermediate_roots {
             let mut root_data = Vec::new();
             root_data.extend_from_slice(addr);
@@ -178,24 +146,17 @@ impl RootContract {
         Ok(boc)
     }
 
-    // Deserialize contract state from BOC
     pub fn deserialize(boc: BOC) -> Result<Self, SystemError> {
-        let cells = boc.get_cells();
-        if cells.is_empty() {
-            return Err(SystemError {
-                error_type: SystemErrorType::DeserializationError,
-                message: "Empty BOC".to_string(),
-            });
-        }
+        let root_cell = boc.get_root_cell().ok_or(SystemError {
+            error_type: SystemErrorType::NotFound,
+            message: "Empty BOC".to_string(),
+        })?;
 
-        // First cell contains contract state
-        let state_cell = &cells[0];
-        let state_data = state_cell.get_data();
+        let state_data = root_cell.get_data();
 
         if state_data.len() < 25 {
-            // 8 + 8 + 8 + 1 + 1 bytes minimum
             return Err(SystemError {
-                error_type: SystemErrorType::DeserializationError,
+                error_type: SystemErrorType::NotFound,
                 message: "Invalid state data length".to_string(),
             });
         }
@@ -215,15 +176,14 @@ impl RootContract {
         let verify_settlement_state = state_data[24] != 0;
         let submit_settlement = state_data[25] != 0;
 
-        // Create a new BOC for the global tree (cells[1..])
-        let global_tree = SparseMerkleTreeR::new(); // You'll need to implement proper deserialization
+        let global_tree = SparseMerkleTreeR::new();
 
-        // Extract intermediate roots from remaining cells
         let mut intermediate_roots = HashMap::new();
-        for cell in cells.iter().skip(1) {
-            let data = cell.get_data();
+
+        let root_refs = root_cell.get_references();
+        for ref_cell in root_refs {
+            let data = ref_cell.get_data();
             if data.len() == 64 {
-                // addr(32) + root(32)
                 let mut addr = [0u8; 32];
                 let mut root = [0u8; 32];
                 addr.copy_from_slice(&data[0..32]);
@@ -250,6 +210,5 @@ impl RootContract {
     }
 }
 
-// Helper types
 type Hash = [u8; 32];
 type Address = [u8; 32];

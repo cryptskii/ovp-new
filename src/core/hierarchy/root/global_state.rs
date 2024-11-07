@@ -1,3 +1,22 @@
+// ./src/core/hierarchy/root/global_state.rs
+
+// This file contains the GlobalState struct, which represents the global state of the root contract.
+// It contains the root hash of the global Merkle tree, the total balance, and the epoch number BOC. Wrapped in a ZkProof, it is used to verify the state of the root contract.
+use crate::core::error::errors::{SystemError, SystemErrorType};
+use crate::core::hierarchy::account::AccountState;
+use crate::core::hierarchy::merkle_proof::MerkleProof;
+use crate::core::hierarchy::root::RootContract;
+use crate::core::hierarchy::transaction::Transaction;
+use crate::core::hierarchy::tree::SparseMerkleTreeR;
+use crate::core::utils::{Address, Hash};
+use crate::core::zkps::plonky2::{
+    field::goldilocks_field::GoldilocksField, hash::hash_types::PoseidonHash,
+};
+use crate::core::zkps::proof::ZkProof;
+use crate::core::zkps::state_transition::StateTransition;
+use crate::core::zkps::transaction::ZkTransaction;
+use crate::core::zkps::zk_token_proof::ZkTokenProof;
+
 use std::collections::HashMap;
 
 #[derive(Clone)]
