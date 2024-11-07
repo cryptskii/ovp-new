@@ -165,7 +165,7 @@ impl IntermediateContract {
 
         // Update the intermediate tree
         self.intermediate_tree
-            .update(update.key.clone(), update.value.clone(), &update.proof)?;
+            .update(update.key.clone(), update.value.clone())?;
 
         // Add to pending updates
         self.pending_updates

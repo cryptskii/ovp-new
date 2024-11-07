@@ -1,11 +1,13 @@
-use crate::core::types::ovp_types::{SystemError, BOC};
-use crate::core::types::Plonky2System;
-use crate::core::zkp::circuit_builder::{Column, PlonkConfig, VirtualCell, ZkCircuitBuilder};
-use crate::core::zkp::zkp::ZkProof;
+use crate::core::error::errors::SystemError;
+use crate::core::types::boc::BOC;
+use crate::core::zkps::circuit_builder::{Column, VirtualCell, ZkCircuitBuilder};
+use crate::core::zkps::plonky2::Plonky2System;
+use crate::core::zkps::proof::ZkProof;
 use plonky2::field::goldilocks_field::GoldilocksField;
 use plonky2::plonk::config::PoseidonGoldilocksConfig;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+
 pub struct SparseMerkleTreeI {
     circuit_builder: ZkCircuitBuilder<GoldilocksField>,
     plonky2_system: Plonky2System,
@@ -52,41 +54,41 @@ impl SparseMerkleTreeI {
     fn add_path_constraints(
         &mut self,
         path: &[([u8; 32], bool)],
-        key_cell: Column<GoldilocksField>,
-        value_cell: Column<GoldilocksField>,
+        key_cell: Column,
+        value_cell: Column,
     ) -> Result<(), SystemError> {
-        let mut current = self.circuit_builder.poseidon(&[
-            VirtualCell::new(key_cell, 0),
-            VirtualCell::new(value_cell, 0),
+        let mut current = self.circuit_builder.poseidon(vec![
+            VirtualCell::new(key_cell),
+            VirtualCell::new(value_cell),
         ]);
 
         for (sibling, is_left) in path {
             let sibling_cell = self.circuit_builder.add_virtual_target();
             self.circuit_builder.assert_equal(
-                VirtualCell::new(sibling_cell, 0),
-                VirtualCell::new(Column::new(self.hash_to_field(sibling)), 0),
+                VirtualCell::new(sibling_cell),
+                VirtualCell::new(Column::new(self.hash_to_field(sibling))),
             );
 
             if *is_left {
                 current = self
                     .circuit_builder
-                    .poseidon(&[current, VirtualCell::new(sibling_cell, 0)]);
+                    .poseidon(vec![current, VirtualCell::new(sibling_cell)]);
             } else {
                 current = self
                     .circuit_builder
-                    .poseidon(&[VirtualCell::new(sibling_cell, 0), current]);
+                    .poseidon(vec![VirtualCell::new(sibling_cell), current]);
             }
         }
 
         let root_cell = self.circuit_builder.add_virtual_public_input();
         self.circuit_builder
-            .assert_equal(current, VirtualCell::new(root_cell, 0));
+            .assert_equal(current, VirtualCell::new(root_cell));
 
         Ok(())
     }
 
     pub fn verify(&self, key: &[u8], value: &[u8], proof: &ZkProof) -> Result<bool, SystemError> {
-        let circuit = self.circuit_builder.build::<PoseidonGoldilocksConfig>()?;
+        let circuit = self.circuit_builder.build()?;
         self.plonky2_system.verify_proof(proof)
     }
 
@@ -105,7 +107,10 @@ impl SparseMerkleTreeI {
         }
 
         let witness = self.generate_witness(key, value, path)?;
-        self.plonky2_system.generate_proof(&public_inputs, &witness)
+        self.plonky2_system
+            .generate_proof(&public_inputs, &witness)
+            .map(|proof| ZkProof::new(proof))
+            .map_err(|_| SystemError::InvalidProof)
     }
 
     fn generate_merkle_path(&self, key: &[u8]) -> Result<Vec<([u8; 32], bool)>, SystemError> {
@@ -121,11 +126,9 @@ impl SparseMerkleTreeI {
                     path.push((left, true));
                     current = node.right.ok_or(SystemError::InvalidPath)?;
                 }
-            } else {
-                if let Some(right) = node.right {
-                    path.push((right, false));
-                    current = node.left.ok_or(SystemError::InvalidPath)?;
-                }
+            } else if let Some(right) = node.right {
+                path.push((right, false));
+                current = node.left.ok_or(SystemError::InvalidPath)?;
             }
         }
 
