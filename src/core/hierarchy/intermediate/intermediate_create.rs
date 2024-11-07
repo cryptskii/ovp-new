@@ -2,7 +2,7 @@ use crate::core::hierarchy::intermediate::intermediate_contract::IntermediateCon
 use crate::core::hierarchy::intermediate::sparse_merkle_tree_i::SparseMerkleTreeI;
 use crate::core::hierarchy::intermediate::state_tracking_i::ProofInputsI;
 use crate::core::hierarchy::root::root_contract::RootContract;
-use crate::core::storage_node::storage_node::StorageNode;
+use crate::core::storage_node::storage_node_contract::StorageNode;
 use crate::core::types::boc::BOC;
 use crate::core::types::submission::RootSubmission;
 use log::{error, warn};

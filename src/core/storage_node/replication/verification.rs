@@ -1,7 +1,7 @@
 // ./src/core/storage_node/replication/verification.rs
 
-use crate::core::storage_node::storage_node::StorageNode;
 use crate::core::error::SystemError;
+use crate::core::storage_node::storage_node_contract::StorageNode;
 use std::marker::PhantomData;
 use std::sync::Arc;
 use std::time::Duration;

@@ -1,5 +1,5 @@
 use crate::core::error::errors::SystemError;
-use crate::core::storage_node::storage_node::StorageNode;
+use crate::core::storage_node::storage_node_contract::StorageNode;
 use crate::core::types::ZkProof;
 use std::sync::Arc;
 use wasm_bindgen::prelude::*;

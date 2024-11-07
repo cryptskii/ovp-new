@@ -1,7 +1,7 @@
 use crate::core::error::errors::SystemError;
 use crate::core::hierarchy::intermediate::destination_contract::DestinationContract;
 use crate::core::hierarchy::intermediate::sparse_merkle_tree_i::SparseMerkleTreeI;
-use crate::core::storage_node::storage_node::{StorageNode, StorageNodeConfig};
+use crate::core::storage_node::storage_node_contract::{StorageNode, StorageNodeConfig};
 use crate::core::types::ovp_ops::IntermediateOpCode;
 use crate::core::zkps::plonky2::Plonky2System;
 use bincode::deserialize;

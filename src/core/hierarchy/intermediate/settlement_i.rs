@@ -1,7 +1,7 @@
 use crate::core::hierarchy::IntermediateTreeManager;
 
 use crate::core::hierarchy::root_contract::RootContract;
-use crate::core::storage_node::storage_node::StorageNode;
+use crate::core::storage_node::storage_node_contract::StorageNode;
 use crate::core::types::ovp_types::{SystemError, ZkProof, BOC};
 use std::collections::HashMap;
 use std::sync::Arc;

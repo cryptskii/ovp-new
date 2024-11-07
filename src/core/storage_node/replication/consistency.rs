@@ -4,7 +4,7 @@ use crate::core::error::errors::SystemError;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::core::storage_node::storage_node::StorageNode;
+use crate::core::storage_node::storage_node_contract::StorageNode;
 
 /// Factory function to create a new `ReplicationConsistencyManager`.
 pub fn new_replication_consistency_manager(

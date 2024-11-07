@@ -1,6 +1,6 @@
 // ./src/core/storage_node/battery/monitoring.rs
 use crate::core::storage_node::battery::charging::BatteryChargingSystem;
-use crate::core::storage_node::storage_node::StorageNode;
+use crate::core::storage_node::storage_node_contract::StorageNode;
 use crate::core::types::ovp_types::*;
 use std::sync::Arc;
 use std::sync::RwLock;

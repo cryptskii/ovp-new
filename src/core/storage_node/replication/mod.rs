@@ -4,7 +4,7 @@ use crate::core::error::SystemErrorType;
 use crate::core::storage_node::replication::consistency::ReplicationConsistencyManager;
 use crate::core::storage_node::replication::distribution::ReplicationDistributionManager;
 use crate::core::storage_node::replication::verification::ReplicationVerificationManager;
-use crate::core::storage_node::storage_node::StorageNode;
+use crate::core::storage_node::storage_node_contract::StorageNode;
 use std::sync::Arc;
 use std::time::Duration;
 use wasm_bindgen_futures::spawn_local;

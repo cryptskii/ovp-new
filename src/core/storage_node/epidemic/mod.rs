@@ -7,7 +7,7 @@ pub mod sync;
 pub use propagation::BatteryPropagation;
 pub use sync::SynchronizationManager;
 
-use crate::core::storage_node::storage_node::StorageNode;
+use crate::core::storage_node::storage_node_contract::StorageNode;
 use crate::core::types::EpidemicProtocol;
 use std::sync::{Arc, RwLock};
 

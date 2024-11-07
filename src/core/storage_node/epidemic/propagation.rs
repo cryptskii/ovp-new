@@ -9,7 +9,7 @@ use std::sync::atomic::AtomicU64;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::core::storage_node::storage_node::StorageNode;
+use crate::core::storage_node::storage_node_contract::StorageNode;
 
 pub struct BatteryPropagation<RootTree, IntermediateTreeManager> {
     storage_node: Arc<StorageNode<RootTree, IntermediateTreeManager>>,
