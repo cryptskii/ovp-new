@@ -278,6 +278,7 @@ impl WalletBalanceTracker {
                 root_cell.references.clone(),
                 CellType::Ordinary,
                 root_hash,
+                None,
             );
 
             let mut state_boc = BOC::new();

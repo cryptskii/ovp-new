@@ -8,7 +8,7 @@
 pub mod error;
 pub mod hierarchy;
 //pub mod state;
-//pub mod storage_node;
+pub mod storage_node;
 pub mod types;
 //pub mod validation;
 pub mod zkps;

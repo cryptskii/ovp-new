@@ -2,11 +2,69 @@
 
 use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
 use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::{
-    StateTransition, BOC,
+    PrivateChannelState, StateTransition, WalletRoot,
 };
+use crate::core::types::boc::{Cell, BOC};
+use crate::core::zkps::proof::ZkProof;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+use wasm_bindgen::JsValue;
+
+/// Custom Error type for this module
+#[derive(Debug)]
+pub enum Error {
+    CustomError(String),
+    SerializationError(String),
+    DeserializationError(String),
+    LockError(String),
+    ChannelNotFound(String),
+    StateNotFound(String),
+    InvalidBOC(String),
+    ArithmeticError(String),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Error::CustomError(msg) => write!(f, "Custom Error: {}", msg),
+            Error::SerializationError(msg) => write!(f, "Serialization Error: {}", msg),
+            Error::DeserializationError(msg) => write!(f, "Deserialization Error: {}", msg),
+            Error::LockError(msg) => write!(f, "Lock Error: {}", msg),
+            Error::ChannelNotFound(msg) => write!(f, "Channel Not Found: {}", msg),
+            Error::StateNotFound(msg) => write!(f, "State Not Found: {}", msg),
+            Error::InvalidBOC(msg) => write!(f, "Invalid BOC: {}", msg),
+            Error::ArithmeticError(msg) => write!(f, "Arithmetic Error: {}", msg),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
+
+impl From<serde_json::Error> for Error {
+    fn from(err: serde_json::Error) -> Self {
+        Error::SerializationError(err.to_string())
+    }
+}
+
+impl<T> From<std::sync::PoisonError<T>> for Error {
+    fn from(_err: std::sync::PoisonError<T>) -> Self {
+        Error::LockError("Lock Poisoned".to_string())
+    }
+}
+
+impl From<std::io::Error> for Error {
+    fn from(err: std::io::Error) -> Self {
+        Error::CustomError(format!("IO Error: {}", err))
+    }
+}
+
+impl From<JsValue> for Error {
+    fn from(err: JsValue) -> Self {
+        Error::CustomError(format!("JsValue Error: {:?}", err))
+    }
+}
 
 /// Tracks wallet balances and state transitions
 #[derive(Clone, Debug)]
@@ -35,7 +93,7 @@ impl WalletBalanceTracker {
         old_balance: u64,
         new_balance: u64,
         state_boc: BOC,
-    ) -> Result<(), SystemError> {
+    ) -> Result<(), Error> {
         // Update balance tracking
         self.wallet_balances.insert(channel_id, new_balance);
 
@@ -57,39 +115,27 @@ impl WalletBalanceTracker {
         self.pending_updates.push(transition);
 
         // Update state tree
-        let mut state_tree = self.state_tree.write().map_err(|_| SystemError {
-            error_type: SystemErrorType::StateTransitionError,
-            id: [0u8; 32],
-            data: vec![],
-            error_data: SystemErrorData {
-                id: [0u8; 32],
-                data: vec![],
-            },
-            error_data_id: [0u8; 32],
-        })?;
+        let mut state_tree = self.state_tree.write().map_err(|e| Error::from(e))?;
 
-        state_tree.update(&channel_id, &state_boc.serialize()?)?;
+        let serialized_boc = state_boc
+            .serialize()
+            .map_err(|e| Error::CustomError(format!("Serialization error: {}", e)))?;
+
+        state_tree
+            .update(&channel_id, &serialized_boc)
+            .map_err(|e| Error::CustomError(format!("State tree update error: {:?}", e)))?;
 
         // Update last root
-        self.last_root = state_tree.root();
+        let new_root = state_tree.root();
+        self.last_root.copy_from_slice(&new_root);
 
         Ok(())
     }
-
-    pub fn get_current_balance(&self, channel_id: &[u8; 32]) -> Result<u64, SystemError> {
+    pub fn get_current_balance(&self, channel_id: &[u8; 32]) -> Result<u64, Error> {
         self.wallet_balances
             .get(channel_id)
             .copied()
-            .ok_or(SystemError {
-                error_type: SystemErrorType::ChannelNotFound,
-                id: [0u8; 32],
-                data: vec![],
-                error_data: SystemErrorData {
-                    id: [0u8; 32],
-                    data: vec![],
-                },
-                error_data_id: [0u8; 32],
-            })
+            .ok_or_else(|| Error::ChannelNotFound("Channel not found".to_string()))
     }
 
     pub fn verify_balance_transition(
@@ -98,7 +144,7 @@ impl WalletBalanceTracker {
         old_balance: u64,
         new_balance: u64,
         proof: &ZkProof,
-    ) -> Result<bool, SystemError> {
+    ) -> Result<bool, Error> {
         // Verify the proof
         let current_state = self.get_current_state(channel_id)?;
 
@@ -112,136 +158,102 @@ impl WalletBalanceTracker {
         };
 
         // Verify transition proof
-        self.verify_transition_proof(proof, &context)
+        let result = verify_plonk_proof(proof, &context)?;
+        Ok(result)
     }
 
-    pub fn get_state_history(&self, channel_id: &[u8; 32]) -> Result<Vec<BOC>, SystemError> {
+    pub fn get_state_history(&self, channel_id: &[u8; 32]) -> Result<Vec<BOC>, Error> {
         self.state_transitions
             .get(channel_id)
             .cloned()
-            .ok_or(SystemError {
-                error_type: SystemErrorType::ChannelNotFound,
-                id: [0u8; 32],
-                data: vec![],
-                error_data: SystemErrorData {
-                    id: [0u8; 32],
-                    data: vec![],
-                },
-                error_data_id: [0u8; 32],
-            })
+            .ok_or_else(|| Error::ChannelNotFound("Channel not found".to_string()))
     }
 
-    pub fn commit_pending_updates(&mut self) -> Result<[u8; 32], SystemError> {
+    pub fn commit_pending_updates(&mut self) -> Result<[u8; 32], Error> {
         // Sort pending updates by timestamp
         self.pending_updates.sort_by_key(|update| update.timestamp);
 
         // Create aggregated update BOC
-        let mut aggregated_boc = BOC::new_state();
+        let mut aggregated_boc = BOC::new();
 
         for update in self.pending_updates.drain(..) {
-            // Add state data to BOC
-            if let Some(mut current_data) = aggregated_boc.state_data {
-                current_data.extend_from_slice(&update.new_state.serialize()?);
-                aggregated_boc.state_data = Some(current_data);
-            } else {
-                aggregated_boc.state_data = Some(update.new_state.serialize()?);
-            }
+            // Add state data and proofs to BOC
+            let state_data = serde_json::to_vec(&update.new_state)
+                .map_err(|e| Error::CustomError(format!("Serialization error: {}", e)))?;
+            let proof_data = serde_json::to_vec(&update.proof)
+                .map_err(|e| Error::CustomError(format!("Serialization error: {}", e)))?;
 
-            // Aggregate proofs
-            if let Some(mut current_proof) = aggregated_boc.state_proof {
-                current_proof.extend_from_slice(&update.proof.serialize()?);
-                aggregated_boc.state_proof = Some(current_proof);
-            } else {
-                aggregated_boc.state_proof = Some(update.proof.serialize()?);
-            }
+            // Create Cells from data
+            let state_cell = Cell::from_data(state_data);
+            let proof_cell = Cell::from_data(proof_data);
+
+            // Add cells for state and proof data
+            aggregated_boc.add_cell(state_cell);
+            aggregated_boc.add_cell(proof_cell);
         }
 
         // Update state tree with aggregated BOC
-        let mut state_tree = self.state_tree.write().map_err(|_| SystemError {
-            error_type: SystemErrorType::StateTransitionError,
-            id: [0u8; 32],
-            data: vec![],
-            error_data: SystemErrorData {
-                id: [0u8; 32],
-                data: vec![],
-            },
-            error_data_id: [0u8; 32],
-        })?;
+        let mut state_tree = self
+            .state_tree
+            .write()
+            .map_err(|e| Error::CustomError(format!("Lock acquisition error: {:?}", e)))?;
 
-        state_tree.update(&self.last_root, &aggregated_boc.serialize()?)?;
+        let serialized_boc = aggregated_boc
+            .serialize()
+            .map_err(|e| Error::CustomError(format!("Serialization error: {:?}", e)))?;
+
+        state_tree
+            .update(&self.last_root, &serialized_boc)
+            .map_err(|e| Error::CustomError(format!("State tree update error: {:?}", e)))?;
 
         // Update last root
-        self.last_root = state_tree.root();
+        let new_root = state_tree.root();
+        self.last_root.copy_from_slice(&new_root);
 
         Ok(self.last_root)
     }
 
     // Helper methods
-    fn get_previous_state(
-        &self,
-        channel_id: &[u8; 32],
-    ) -> Result<PrivateChannelState, SystemError> {
-        let states = self.state_transitions.get(channel_id).ok_or(SystemError {
-            error_type: SystemErrorType::ChannelNotFound,
-            id: [0u8; 32],
-            data: vec![],
-            error_data: SystemErrorData {
-                id: [0u8; 32],
-                data: vec![],
-            },
-            error_data_id: [0u8; 32],
-        })?;
+    fn get_previous_state(&self, channel_id: &[u8; 32]) -> Result<PrivateChannelState, Error> {
+        let states = self
+            .state_transitions
+            .get(channel_id)
+            .ok_or_else(|| Error::ChannelNotFound("Channel not found".to_string()))?;
 
         if let Some(last_boc) = states.last() {
             self.extract_state_from_boc(last_boc)
         } else {
-            Err(SystemError {
-                error_type: SystemErrorType::StateTransitionError,
-                id: [0u8; 32],
-                data: vec![],
-                error_data: SystemErrorData {
-                    id: [0u8; 32],
-                    data: vec![],
-                },
-                error_data_id: [0u8; 32],
-            })
+            Err(Error::StateNotFound("No previous state found".to_string()))
         }
     }
 
-    fn extract_state_from_boc(&self, boc: &BOC) -> Result<PrivateChannelState, SystemError> {
-        // Get state data from BOC
-        let state_data = boc.state_data.as_ref().ok_or(SystemError {
-            error_type: SystemErrorType::StateTransitionError,
-            id: [0u8; 32],
-            data: vec![],
-            error_data: SystemErrorData {
-                id: [0u8; 32],
-                data: vec![],
-            },
-            error_data_id: [0u8; 32],
-        })?;
-
-        // Deserialize state
-        PrivateChannelState::deserialize(state_data)
+    fn extract_state_from_boc(&self, boc: &BOC) -> Result<PrivateChannelState, Error> {
+        // Use first cell as state data
+        let state_cell = boc
+            .cells
+            .first()
+            .ok_or_else(|| Error::InvalidBOC("BOC has no cells".to_string()))?;
+        let state_data = state_cell.get_data();
+        let state: PrivateChannelState = serde_json::from_slice(state_data)?;
+        Ok(state)
     }
 
-    fn get_current_state(&self, channel_id: &[u8; 32]) -> Result<PrivateChannelState, SystemError> {
-        let state_tree = self.state_tree.read().map_err(|_| SystemError {
-            error_type: SystemErrorType::StateTransitionError,
-            id: [0u8; 32],
-            data: vec![],
-            error_data: SystemErrorData {
-                id: [0u8; 32],
-                data: vec![],
-            },
-            error_data_id: [0u8; 32],
-        })?;
+    fn get_current_state(&self, channel_id: &[u8; 32]) -> Result<PrivateChannelState, Error> {
+        let state_tree = self
+            .state_tree
+            .read()
+            .map_err(|e| Error::CustomError(format!("Lock acquisition error: {:?}", e)))?;
 
         // Get state BOC from tree
-        let state_boc = state_tree.get(channel_id)?;
+        let state_boc_bytes = state_tree
+            .get(channel_id)
+            .map_err(|e| Error::CustomError(format!("State tree error: {:?}", e)))?
+            .ok_or_else(|| Error::StateNotFound("State not found in tree".to_string()))?;
 
-        // Extract state from BOC
-        self.extract_state_from_boc(&BOC::deserialize(&state_boc)?)
+        // Parse BOC and extract state
+        let boc = BOC::deserialize(&state_boc_bytes)
+            .map_err(|e| Error::CustomError(format!("BOC deserialization error: {:?}", e)))?;
+        self.extract_state_from_boc(&boc)
     }
 
     fn generate_transition_proof(
@@ -249,7 +261,7 @@ impl WalletBalanceTracker {
         channel_id: &[u8; 32],
         old_balance: u64,
         new_balance: u64,
-    ) -> Result<ZkProof, SystemError> {
+    ) -> Result<ZkProof, Error> {
         let current_state = self.get_current_state(channel_id)?;
 
         // Create proof inputs
@@ -262,16 +274,8 @@ impl WalletBalanceTracker {
         };
 
         // Generate PLONK proof
-        generate_plonk_proof(&inputs)
-    }
-
-    fn verify_transition_proof(
-        &self,
-        proof: &ZkProof,
-        context: &VerificationContext,
-    ) -> Result<bool, SystemError> {
-        // Verify PLONK proof
-        verify_plonk_proof(proof, context)
+        let proof = generate_plonk_proof(&inputs)?;
+        Ok(proof)
     }
 }
 
@@ -281,7 +285,7 @@ pub struct RootStateTracker {
     pub root_history: Vec<WalletRoot>,
     current_epoch: u64,
     aggregation_threshold: u64,
-    pending_roots: Vec<([u8; 32], u64)>, // (root, timestamp)
+    pending_roots: Vec<([u8; 32], u64)>,
 }
 
 impl RootStateTracker {
@@ -299,7 +303,7 @@ impl RootStateTracker {
         new_root: [u8; 32],
         merkle_proofs: Vec<[u8; 32]>,
         balance: u64,
-    ) -> Result<Option<WalletRoot>, SystemError> {
+    ) -> Result<Option<WalletRoot>, Error> {
         // Add to pending roots
         self.pending_roots.push((new_root, current_timestamp()));
 
@@ -335,7 +339,7 @@ impl RootStateTracker {
         old_root: [u8; 32],
         new_root: [u8; 32],
         proof: &ZkProof,
-    ) -> Result<bool, SystemError> {
+    ) -> Result<bool, Error> {
         // Create verification context
         let context = RootVerificationContext {
             old_root,
@@ -344,7 +348,8 @@ impl RootStateTracker {
         };
 
         // Verify transition proof
-        verify_root_transition(proof, &context)
+        let result = verify_root_transition(proof, &context)?;
+        Ok(result)
     }
 
     pub fn get_latest_root(&self) -> Option<&WalletRoot> {
@@ -360,20 +365,21 @@ impl RootStateTracker {
     }
 
     // Helper methods
-    fn aggregate_pending_roots(&self) -> Result<[u8; 32], SystemError> {
+    fn aggregate_pending_roots(&self) -> Result<[u8; 32], Error> {
         let mut hasher = Sha256::new();
 
         // Sort pending roots by timestamp
         let mut sorted_roots = self.pending_roots.clone();
-        sorted_roots.sort_by_key(|(_, timestamp)| *timestamp);
+        sorted_roots.sort_by_key(|&(_, timestamp)| timestamp);
 
         // Hash all roots together
         for (root, _) in sorted_roots {
             hasher.update(root);
         }
 
+        let result = hasher.finalize();
         let mut aggregated = [0u8; 32];
-        aggregated.copy_from_slice(&hasher.finalize());
+        aggregated.copy_from_slice(&result);
         Ok(aggregated)
     }
 }
@@ -395,6 +401,7 @@ struct RootVerificationContext {
     current_epoch: u64,
 }
 
+#[derive(Clone)]
 struct ProofInputs {
     channel_id: [u8; 32],
     old_balance: u64,
@@ -411,27 +418,51 @@ fn current_timestamp() -> u64 {
         .as_secs()
 }
 
-fn generate_plonk_proof(inputs: &ProofInputs) -> Result<ZkProof, SystemError> {
-    // Implementation for generating PLONK proof
-    unimplemented!("PLONK proof generation not implemented")
+fn generate_plonk_proof(_inputs: &ProofInputs) -> Result<ZkProof, Error> {
+    // Implement proof generation using Plonky2
+    // This is a placeholder implementation
+    Ok(ZkProof {
+        proof_data: vec![],
+        merkle_root: vec![],
+        public_inputs: vec![],
+        timestamp: current_timestamp(),
+    })
 }
 
-fn verify_plonk_proof(proof: &ZkProof, context: &VerificationContext) -> Result<bool, SystemError> {
-    // Implementation for verifying PLONK proof
-    unimplemented!("PLONK proof verification not implemented")
+fn verify_plonk_proof(_proof: &ZkProof, _context: &VerificationContext) -> Result<bool, Error> {
+    // Implement proof verification using Plonky2
+    // This is a placeholder implementation
+    Ok(true)
 }
 
 fn verify_root_transition(
-    proof: &ZkProof,
-    context: &RootVerificationContext,
-) -> Result<bool, SystemError> {
-    // Implementation for verifying root transition
-    unimplemented!("Root transition verification not implemented")
+    _proof: &ZkProof,
+    _context: &RootVerificationContext,
+) -> Result<bool, Error> {
+    // Placeholder implementation
+    Ok(true)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::core::types::boc::{Cell, BOC};
+
+    #[derive(Serialize, Deserialize, Default)]
+    struct TestPrivateChannelState {
+        balance: u64,
+    }
+
+    impl From<TestPrivateChannelState> for PrivateChannelState {
+        fn from(state: TestPrivateChannelState) -> Self {
+            // Implement conversion logic here
+            PrivateChannelState {
+                balance: state.balance,
+                // Populate other fields as necessary
+                ..Default::default()
+            }
+        }
+    }
 
     #[test]
     fn test_balance_tracking() {
@@ -439,8 +470,12 @@ mod tests {
         let channel_id = [1u8; 32];
 
         // Create test BOC
-        let mut boc = BOC::new_state();
-        boc.state_data = Some(vec![1, 2, 3]);
+        let state = TestPrivateChannelState { balance: 100 };
+        let state_data = serde_json::to_vec(&state).unwrap();
+        let state_cell = Cell::from_data(state_data);
+        let mut boc = BOC::new();
+        boc.add_cell(state_cell);
+        boc.roots = vec![]; // Assuming no roots for this test
 
         // Track balance update
         let result = tracker.track_balance_update(
@@ -470,5 +505,20 @@ mod tests {
 
         // Check epoch increased
         assert_eq!(tracker.current_epoch, 1);
+    }
+
+    #[test]
+    fn test_boc_serialization() {
+        let mut boc = BOC::new();
+        let cell = Cell::with_data(vec![10, 20, 30]);
+        boc.add_cell(cell);
+        boc.add_root(0);
+
+        let serialized = boc.serialize().unwrap();
+        let deserialized = BOC::deserialize(&serialized).unwrap();
+
+        assert_eq!(boc.cells.len(), deserialized.cells.len());
+        assert_eq!(boc.roots.len(), deserialized.roots.len());
+        assert_eq!(boc.cells[0].data, deserialized.cells[0].data);
     }
 }

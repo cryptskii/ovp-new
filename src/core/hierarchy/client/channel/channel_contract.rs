@@ -119,6 +119,7 @@ impl ChannelContract {
             vec![],
             CellType::Ordinary,
             self.calculate_state_hash()?,
+            None,
         );
         boc.add_cell(state_cell);
         boc.add_root(0);

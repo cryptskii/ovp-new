@@ -1,7 +1,87 @@
 use crate::core::zkps::plonky2::Plonky2SystemHandle;
-use crate::core::zkps::proof::{ProofMetadataJS, ProofType, ProofWithMetadataJS, ZkProof};
+use crate::core::zkps::proof::{ProofBundle, ProofType, ZkProof};
 use js_sys::Uint8Array;
+use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
+
+#[wasm_bindgen]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ProofMetadataJS {
+    proof_type: i32,
+    channel_id: Option<Vec<u8>>,
+    created_at: u64,
+    verified_at: Option<u64>,
+}
+
+#[wasm_bindgen]
+impl ProofMetadataJS {
+    #[wasm_bindgen(constructor)]
+    pub fn new(proof_type: i32, created_at: u64) -> Self {
+        Self {
+            proof_type,
+            channel_id: None,
+            created_at,
+            verified_at: None,
+        }
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn proof_type(&self) -> i32 {
+        self.proof_type
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn created_at(&self) -> u64 {
+        self.created_at
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn verified_at(&self) -> Option<u64> {
+        self.verified_at
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_channel_id(&mut self, channel_id: Option<Box<[u8]>>) {
+        self.channel_id = channel_id.map(|b| b.to_vec());
+    }
+
+    #[wasm_bindgen(setter)]
+    pub fn set_verified_at(&mut self, timestamp: Option<u64>) {
+        self.verified_at = timestamp;
+    }
+}
+
+#[wasm_bindgen]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ProofWithMetadataJS {
+    proof: ZkProof,
+    metadata: ProofMetadataJS,
+}
+
+#[wasm_bindgen]
+impl ProofWithMetadataJS {
+    #[wasm_bindgen(constructor)]
+    pub fn new(proof_js: JsValue, metadata_js: JsValue) -> Result<ProofWithMetadataJS, JsValue> {
+        let proof: ZkProof = serde_wasm_bindgen::from_value(proof_js)
+            .map_err(|e| JsValue::from_str(&format!("Failed to deserialize proof: {}", e)))?;
+        let metadata: ProofMetadataJS = serde_wasm_bindgen::from_value(metadata_js)
+            .map_err(|e| JsValue::from_str(&format!("Failed to deserialize metadata: {}", e)))?;
+
+        Ok(ProofWithMetadataJS { proof, metadata })
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn proof(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.proof)
+            .map_err(|e| JsValue::from_str(&format!("Failed to serialize proof: {}", e)))
+    }
+
+    #[wasm_bindgen(getter)]
+    pub fn metadata(&self) -> Result<JsValue, JsValue> {
+        serde_wasm_bindgen::to_value(&self.metadata)
+            .map_err(|e| JsValue::from_str(&format!("Failed to serialize metadata: {}", e)))
+    }
+}
 
 #[wasm_bindgen]
 pub fn generate_proof(
@@ -63,17 +143,56 @@ pub fn create_proof_with_metadata(
         timestamp,
     };
 
-    let proof_metadata =
-        ProofMetadataJS::new(ProofType::StateTransition as i32, None, timestamp, None);
+    let metadata = ProofMetadataJS::new(ProofType::StateTransition as i32, timestamp);
 
-    let proof_with_metadata = ProofWithMetadataJS::new(
-        serde_wasm_bindgen::to_value(&zk_proof)
-            .map_err(|e| JsValue::from_str(&format!("Failed to serialize proof: {}", e)))?,
-        proof_metadata,
-    )?;
+    let proof_js = serde_wasm_bindgen::to_value(&zk_proof)?;
+    let metadata_js = serde_wasm_bindgen::to_value(&metadata)?;
 
-    proof_with_metadata.proof().and_then(|_proof_js| {
-        serde_wasm_bindgen::to_value(&proof_with_metadata)
-            .map_err(|e| JsValue::from_str(&format!("Failed to serialize metadata: {}", e)))
-    })
+    let proof_with_metadata = ProofWithMetadataJS::new(proof_js, metadata_js)?;
+    serde_wasm_bindgen::to_value(&proof_with_metadata)
+        .map_err(|e| JsValue::from_str(&format!("Failed to serialize bundle: {}", e)))
+}
+
+fn to_js_error<E: std::fmt::Display>(error: E) -> JsValue {
+    JsValue::from_str(&format!("Error: {}", error))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_proof_metadata() {
+        let timestamp = 12345;
+        let metadata = ProofMetadataJS::new(ProofType::StateTransition as i32, timestamp);
+
+        assert_eq!(metadata.created_at(), timestamp);
+        assert_eq!(metadata.proof_type(), ProofType::StateTransition as i32);
+        assert!(metadata.verified_at().is_none());
+    }
+
+    #[test]
+    fn test_proof_with_metadata() {
+        let timestamp = 12345;
+        let zk_proof = ZkProof {
+            proof_data: vec![1, 2, 3],
+            public_inputs: vec![100, 200],
+            merkle_root: vec![0; 32],
+            timestamp,
+        };
+
+        let metadata = ProofMetadataJS::new(ProofType::StateTransition as i32, timestamp);
+
+        let proof_js = serde_wasm_bindgen::to_value(&zk_proof).unwrap();
+        let metadata_js = serde_wasm_bindgen::to_value(&metadata).unwrap();
+
+        let bundle = ProofWithMetadataJS::new(proof_js, metadata_js).unwrap();
+
+        // Test getters
+        let proof_result = bundle.proof().unwrap();
+        let metadata_result = bundle.metadata().unwrap();
+
+        assert!(proof_result.is_object());
+        assert!(metadata_result.is_object());
+    }
 }

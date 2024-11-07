@@ -20,6 +20,7 @@ type F = GoldilocksField;
 type C = PoseidonGoldilocksConfig;
 
 #[wasm_bindgen]
+
 pub struct Plonky2System {
     circuit_config: CircuitConfig,
     state_transition_circuit: StateTransitionCircuitData,

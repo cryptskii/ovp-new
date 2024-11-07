@@ -1,6 +1,6 @@
 // ./src/core/storage_node/replication/consistency.rs
 
-use crate::core::types::SystemError;
+use crate::core::error::errors::SystemError;
 use std::sync::Arc;
 use std::time::Duration;
 
