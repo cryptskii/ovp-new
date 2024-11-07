@@ -8,6 +8,7 @@ pub struct DestinationContract {
     pub balance: u64,
     pub signatures: HashMap<String, Vec<u8>>,
     pub settled: bool,
+    pub submit_root: bool,
 }
 
 impl DestinationContract {
@@ -17,6 +18,7 @@ impl DestinationContract {
             balance: initial_balance,
             signatures: HashMap::new(),
             settled: false,
+            submit_root: false,
         }
     }
 

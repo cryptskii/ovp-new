@@ -12,6 +12,13 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 #[cfg(feature = "native")]
 use async_std::task;
 
+pub struct IntermediateContractcreate {
+    root_contract: RootContract,
+    wallet_states: HashMap<String, Vec<u8>>,
+    last_root_submission: Option<(u64, Vec<u8>)>,
+    proof_system: ProofInputsI,
+}
+
 impl IntermediateContract {
     fn verify_storage_state<R, I>(
         storage_nodes: &Vec<StorageNode<R, I>>,
@@ -138,7 +145,7 @@ impl IntermediateContract {
             merkle_root,
         };
 
-        self.destination_contract.submit_root(submission).await?;
+        self.destination_contract.submit_root = submission;
         self.calculate_intermediate_root()?;
         Ok(())
     }

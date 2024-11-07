@@ -1,7 +1,4 @@
-use crate::core::hierarchy::ZkProof;
-use crate::core::state::boc::cell_serialization::BOC;
-use crate::core::zkp::circuit_builder::ZkCircuitBuilder;
-use crate::core::zkp::plonky2::Plonky2System;
+// ./src/core/hierarchy/intermediate/proof_exporter_i.rs
 
 pub struct ProofExporterI;
 

@@ -26,14 +26,16 @@ pub enum SettlementStatus {
     Verifying,
     Confirmed,
     Rejected,
+    Finalized,
+    ConfirmedAndFinalized,
 }
 
 impl<RootTree> SettlementIntermediate<RootTree> {
     pub fn new(
         root_contract: Arc<RootContract>,
         storage_nodes: Vec<StorageNode<RootTree, IntermediateTreeManager>>,
-    ) -> Self {
-        Self {
+    ) -> SettlementIntermediate<RootTree> {
+        SettlementIntermediate {
             root_contract,
             storage_nodes,
             pending_settlements: HashMap::new(),
@@ -41,6 +43,37 @@ impl<RootTree> SettlementIntermediate<RootTree> {
         }
     }
 
+    // submit settlement proof
+    pub async fn submit_settlement_proof(
+        &mut self,
+        channel_id: [u8; 32],
+        settlement_state: SettlementState,
+        proof: ZkProof,
+    ) -> Result<(), SystemError> {
+        // Verify the proof
+        if !verify_proof(&settlement_state, &proof) {
+            return Err(SystemError::InvalidProof);
+        }
+
+        // Verify the settlement state against the root contract
+        if !self
+            .root_contract
+            .as_ref()
+            .verify_settlement_state(channel_id, settlement_state.clone())
+            .await
+        {
+            return Err(SystemError::InvalidSettlementState);
+        }
+
+        // Add to pending settlements
+        self.pending_settlements
+            .insert(channel_id, settlement_state);
+
+        // Add to settlement proofs
+        self.settlement_proofs.insert(channel_id, proof);
+
+        Ok(())
+    }
     pub async fn process_settlement(
         &mut self,
         channel_id: [u8; 32],
@@ -107,7 +140,7 @@ impl<RootTree> SettlementIntermediate<RootTree> {
         Ok(proof)
     }
 
-    async fn submit_settlement(&self, channel_id: [u8; 32]) -> Result<(), SystemError> {
+    async fn submit_settlement(&mut self, channel_id: [u8; 32]) -> Result<(), SystemError> {
         let settlement_state = self
             .pending_settlements
             .get(&channel_id)
@@ -117,13 +150,13 @@ impl<RootTree> SettlementIntermediate<RootTree> {
             .get(&channel_id)
             .ok_or(SystemError::ProofNotFound)?;
         self.root_contract
-            .submit_settlement(channel_id, settlement_state.clone(), proof.clone())
+            .submit_settlement_proof(channel_id, settlement_state.clone(), proof.clone())
             .await
             .map_err(|e| SystemError::Generic(e.to_string()))?;
 
-        // Update settlement status to Completed
+        // Update settlement status to Finalized
         if let Some(settlement) = self.pending_settlements.get_mut(&channel_id) {
-            settlement.status = SettlementStatus::Completed;
+            settlement.status = SettlementStatus::Finalized;
         }
 
         // Clean up proofs after successful submission
@@ -131,9 +164,11 @@ impl<RootTree> SettlementIntermediate<RootTree> {
 
         Ok(())
     }
+
     fn verify_state_consistency(&self, stored_state: &BOC, final_state: &BOC) -> bool {
         stored_state.merkle_root == final_state.merkle_root
     }
+
     fn extract_final_balances(&self, state: &BOC) -> Result<HashMap<[u8; 32], u64>, SystemError> {
         let mut balances = HashMap::new();
         let state_data = state.deserialize_state()?;

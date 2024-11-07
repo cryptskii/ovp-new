@@ -13,6 +13,8 @@ pub struct RootContract {
     epoch_duration: u64,
     // Last submission timestamp
     last_submission: u64,
+    // Whether to verify settlement state
+    verify_settlement_state: bool,
 }
 
 impl RootContract {
@@ -23,6 +25,7 @@ impl RootContract {
             epoch: 0,
             epoch_duration,
             last_submission: 0,
+            verify_settlement_state: true,
         }
     }
 
@@ -129,6 +132,13 @@ impl RootContract {
             let addr = Address::deserialize(roots_slice.get_next(256)?)?;
             let root = Hash::from_slice(roots_slice.get_next(256)?);
             intermediate_roots.insert(addr, root);
+            roots_slice = roots_slice.reference(1)?;
+
+            // TODO: Check for duplicate keys
+            // if intermediate_roots.contains_key(&addr) {
+            //     return Err(Error::InvalidProof);
+            // }
+            // intermediate_roots.insert(addr, root);
         }
 
         Ok(Self {
@@ -137,6 +147,7 @@ impl RootContract {
             epoch,
             epoch_duration,
             last_submission,
+            verify_settlement_state: false,
         })
     }
 }
