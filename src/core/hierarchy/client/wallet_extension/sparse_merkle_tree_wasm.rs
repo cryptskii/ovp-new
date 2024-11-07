@@ -5,11 +5,9 @@ use wasm_bindgen::prelude::*;
 const TREE_HEIGHT: usize = 256;
 
 #[wasm_bindgen]
-#[derive(Clone, Debug)]
 pub struct SparseMerkleTreeWasm {
     root_hash: Vec<u8>,
-    nodes: HashMap<Vec<u8>, LeafNodeWasm>,
-    default_nodes: Vec<Vec<u8>>,
+    nodes: HashMap<Vec<u8>, Box<LeafNodeWasm>>,
 }
 
 #[derive(Clone, Debug)]
@@ -38,12 +36,11 @@ impl SparseMerkleTreeWasm {
 
         Self {
             root_hash: default_nodes[0].clone(),
-            nodes: HashMap::new(),
-            default_nodes,
+            nodes: HashMap::new(), // default_nodes: default_nodes,
         }
+        // default_nodes: default_nodes,
     }
-
-    pub fn update(&mut self, key: &[u8], value: &[u8]) -> Result<(), JsValue> {
+    pub fn get(&self, key: &[u8]) -> Result<Option<Vec<u8>>, JsValue> {
         let key_hash = hash_key(key);
         let value_hash = hash_value(value);
 
@@ -217,6 +214,25 @@ impl SparseMerkleTreeWasm {
         }
 
         Ok(node_hash)
+    }
+    pub fn update(&mut self, key: &[u8], value: &[u8]) -> Result<(), JsValue> {
+        let key_hash = hash_key(key);
+        let value_hash = hash_value(value);
+
+        // Create leaf node
+        let leaf = LeafNodeWasm {
+            hash: value_hash.clone(),
+            value: Some(value.to_vec()),
+            left: None,
+            right: None,
+        };
+
+        self.nodes.insert(value_hash.clone(), leaf);
+
+        // Update path to root
+        self.update_path(&key_hash, &value_hash, 0)?;
+
+        Ok(())
     }
 }
 

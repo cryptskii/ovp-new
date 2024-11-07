@@ -6,8 +6,8 @@ use std::sync::{Arc, RwLock};
 /// Represents a group of channels.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ChannelGroup {
-    name: String,
-    channels: HashSet<[u8; 32]>,
+    pub name: String,
+    pub channels: HashSet<[u8; 32]>,
 }
 
 impl ChannelGroup {
