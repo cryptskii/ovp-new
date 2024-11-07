@@ -1,9 +1,9 @@
 use crate::core::error::errors;
 use crate::core::error::errors::{SystemError, SystemErrorType};
 use crate::core::hierarchy::client::wallet_extension::sparse_merkle_tree_wasm::SparseMerkleTreeWasm;
-use crate::core::hierarchy::client::wallet_extension::state_tracking::{
-    Error as TrackingError, WalletBalanceTracker,
-};
+
+use crate::core::error::errors::Error;
+use crate::core::hierarchy::client::wallet_extension::state_tracking::WalletBalanceTracker;
 use crate::core::hierarchy::client::wallet_extension::wallet_extension_types::{
     Transaction, TransactionStatus,
 };
@@ -14,15 +14,15 @@ use std::sync::{Arc, Mutex};
 use wasm_bindgen::JsValue;
 
 // Error conversions
-impl From<TrackingError> for SystemError {
-    fn from(err: TrackingError) -> Self {
+
+impl From<crate::core::error::errors::Error> for SystemError {
+    fn from(err: crate::core::error::errors::Error) -> Self {
         SystemError::new(
             SystemErrorType::InvalidTransaction,
             format!("State tracking error: {}", err),
         )
     }
 }
-
 impl From<JsValue> for SystemError {
     fn from(err: JsValue) -> Self {
         SystemError::new(
@@ -41,20 +41,21 @@ impl From<serde_wasm_bindgen::Error> for SystemError {
     }
 }
 
-impl From<errors::Error> for SystemError {
-    fn from(err: errors::Error) -> Self {
-        match err {
-            errors::Error::SerializationError(msg) => SystemError::new(
-                SystemErrorType::InvalidTransaction,
-                format!("BOC serialization error: {}", msg),
-            ),
-            _ => SystemError::new(
-                SystemErrorType::InvalidTransaction,
-                format!("BOC error: {:?}", err),
-            ),
-        }
-    }
-}
+// Remove the conflicting implementation
+// impl From<errors::Error> for SystemError {
+//     fn from(err: errors::Error) -> Self {
+//         match err {
+//             errors::Error::SerializationError(msg) => SystemError::new(
+//                 SystemErrorType::InvalidTransaction,
+//                 format!("BOC serialization error: {}", msg),
+//             ),
+//             _ => SystemError::new(
+//                 SystemErrorType::InvalidTransaction,
+//                 format!("BOC error: {:?}", err),
+//             ),
+//         }
+//     }
+// }
 
 pub struct TransactionManager {
     proof_generator: Arc<Mutex<ProofGenerator>>,
@@ -127,7 +128,7 @@ impl TransactionManager {
             sequence_number: 0,
             timestamp: Self::get_timestamp(),
             status: TransactionStatus::Pending,
-            signature: [0u8; 64],
+            signature: [0u8; 64].into(),
             zk_proof: proof.proof_data.clone(),
             merkle_proof: vec![],
             previous_state: vec![],
