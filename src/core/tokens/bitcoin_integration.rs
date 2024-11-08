@@ -1,15 +1,8 @@
-use codec::{Decode, Encode};
-use core::marker::PhantomData;
+
 use frame_support::{
     traits::{Currency as FrameCurrency, ExistenceRequirement, WithdrawReasons},
     StorageValue,
 };
-use scale_info::TypeInfo;
-use sp_runtime::{
-    traits::{AtLeast32BitUnsigned, MaybeSerializeDeserialize, Member, Saturating, StaticLookup},
-    DispatchError, DispatchResult, RuntimeDebug,
-};
-use sp_std::prelude::*;
 
 pub trait BitcoinConfig: 'static + Eq + Clone {
     type AccountId: Member + Parameter;
@@ -34,8 +27,7 @@ impl Default for BitcoinNetwork {
 
 /// Bitcoin currency type implementing currency traits.
 #[derive(RuntimeDebug, Clone, PartialEq, Eq, Encode, Decode, TypeInfo)]
-pub struct Bitcoin<T: BitcoinConfig>(PhantomData<T>);
-
+pub struct Bitcoin<T: BitcoinConfig>(PhantomData<T>); // T: BitcoinConfi
 impl<T: BitcoinConfig> Default for Bitcoin<T> {
     fn default() -> Self {
         Self(PhantomData)

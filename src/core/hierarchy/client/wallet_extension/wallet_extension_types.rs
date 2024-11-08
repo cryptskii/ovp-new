@@ -6,9 +6,9 @@ use crate::core::types::boc::BOC;
 use crate::core::types::WalletExtensionStateChangeOp;
 use crate::core::zkps::plonky2::Plonky2SystemHandle;
 use crate::core::zkps::proof::ZkProof;
+use serde::{Deserialize, Serialize};
 
 use ed25519_dalek::Signature;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, RwLock};
@@ -33,7 +33,6 @@ impl Clone for PlonkySystemHandleWrapper {
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
 pub struct CreateChannelParams {
     pub counterparty: ByteArray32,
     pub initial_balance: u64,
@@ -41,13 +40,11 @@ pub struct CreateChannelParams {
     pub spending_limit: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
 pub struct ChannelUpdate {
     pub new_state: PrivateChannelState,
     pub balance: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
 pub struct WalletStateUpdate {
     pub old_balance: u64,
     pub old_nonce: u64,
@@ -57,7 +54,7 @@ pub struct WalletStateUpdate {
     pub merkle_root: [u8; 32],
 }
 
-#[derive(Serialize, Deserialize, Clone, Default, Debug)]
+#[derive(Debug, Clone, Default)]
 pub struct PrivateChannelState {
     pub balance: u64,
     pub nonce: u64,
@@ -65,7 +62,7 @@ pub struct PrivateChannelState {
     pub merkle_root: [u8; 32],
 }
 
-#[derive(Serialize, Deserialize, Clone, Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct RebalanceConfig {
     pub min_balance: u64,
     pub max_balance: u64,
@@ -79,7 +76,7 @@ pub struct RebalanceConfig {
     pub max_rebalance_attempts: u32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Default, Debug)]
+#[derive(Clone, Default, Debug)]
 pub struct ChannelConfig {
     pub channel_id: [u8; 32],
     pub capacity: u64,
@@ -99,15 +96,14 @@ pub struct ChannelConfig {
     pub auto_close_threshold: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Clone)]
 pub struct TransactionRequest {
-    pub channel_id: ByteArray32,
-    pub recipient: ByteArray32,
+    pub channel_id: [u8; 32],
+    pub recipient: [u8; 32],
     pub amount: u64,
     pub fee: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
 pub struct Transaction {
     pub id: [u8; 32],
     pub channel_id: [u8; 32],
@@ -126,19 +122,10 @@ pub struct Transaction {
     pub fee: u64,
 }
 
-#[derive(Serialize, Deserialize, Clone, PartialEq)]
 pub enum TransactionStatus {
     Pending,
     Confirmed,
     Failed,
-}
-
-impl Transaction {
-    pub fn serialize(&self) -> Result<Vec<u8>, Error> {
-        bincode::serialize(self).map_err(|e| {
-            Error::SerializationError(format!("Failed to serialize transaction: {:?}", e))
-        })
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -170,18 +157,18 @@ impl Default for ChannelClosureRequest {
     }
 }
 
-#[derive(Clone)]
 pub struct WalletExtension {
     pub wallet_id: [u8; 32],
     pub channels: HashMap<[u8; 32], Arc<RwLock<ChannelContract>>>,
     pub total_locked_balance: u64,
     pub rebalance_config: RebalanceConfig,
     pub proof_system: Arc<PlonkySystemHandleWrapper>,
-    pub state_tree: SparseMerkleTreeWasm,
+    pub state_tree: Arc<SparseMerkleTreeWasm>,
     pub root_hash: [u8; 32],
     pub balance: u64,
     pub encrypted_states: HashMap<[u8; 32], Vec<u8>>,
 }
+
 impl fmt::Debug for WalletExtension {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("WalletExtension")
@@ -190,13 +177,14 @@ impl fmt::Debug for WalletExtension {
             .field("total_locked_balance", &self.total_locked_balance)
             .field("rebalance_config", &self.rebalance_config)
             .field("proof_system", &self.proof_system)
-            .field("state_tree", &self.state_tree)
+            .field("state_tree", &"<state_tree>")
             .field("root_hash", &self.root_hash)
             .field("balance", &self.balance)
             .field("encrypted_states", &"<encrypted_states>")
             .finish()
     }
 }
+
 pub struct WalletExtensionStateChange {
     pub op: WalletExtensionStateChangeOp,
     pub channel_id: [u8; 32],
@@ -213,22 +201,20 @@ pub struct WalletExtensionStateChange {
     pub previous_state: Vec<u8>,
     pub new_state: Vec<u8>,
 }
-#[derive(Debug, Clone, Serialize, Deserialize)]
+
 pub struct Channel {
     pub channel_id: [u8; 32],
     pub wallet_id: [u8; 32],
-    #[serde(skip)]
     pub state: Arc<RwLock<PrivateChannelState>>,
-    #[serde(skip)]
     pub state_history: Vec<StateTransition>,
     pub participants: Vec<[u8; 32]>,
     pub config: ChannelConfig,
     pub spending_limit: u64,
-    #[serde(skip)]
     pub proof_system: Arc<PlonkySystemHandleWrapper>,
     pub(crate) boc_history: Vec<BOC>,
     pub(crate) proof: Vec<u8>,
 }
+
 impl Default for Channel {
     fn default() -> Self {
         Self {

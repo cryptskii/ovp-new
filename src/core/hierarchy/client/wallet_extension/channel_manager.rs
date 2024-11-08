@@ -286,15 +286,6 @@ fn serialize_channel(channel: &Arc<RwLock<ChannelContract>>) -> Vec<u8> {
 }
 
 #[wasm_bindgen]
-#[derive(Debug)]
-pub struct ChannelContract {
-    id: String,
-    balance: u64,
-    nonce: u64,
-    seqno: u64,
-}
-
-#[wasm_bindgen]
 impl ChannelContract {
     #[wasm_bindgen(constructor)]
     pub fn new(id: String) -> ChannelContract {

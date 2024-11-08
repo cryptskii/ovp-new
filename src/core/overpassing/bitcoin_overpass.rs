@@ -1,9 +1,6 @@
 use codec::{Decode, Encode};
 use core::convert::TryFrom;
 use plonky2::{field::goldilocks_field::GoldilocksField, plonk::proof::ProofWithPublicInputs};
-use sp_core::hashing::keccak_256;
-use sp_runtime_interface::{pass_by::PassByCodec, runtime_interface, RuntimeInterface};
-use sp_std::{prelude::*, vec::Vec};
 
 const BOC_HASH_SIZE: usize = 32;
 const BRIDGE_PREFIX: &[u8] = b"ZKBRIDGE";

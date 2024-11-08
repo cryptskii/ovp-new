@@ -1,8 +1,8 @@
 use crate::core::error::errors::{SystemError, SystemErrorType};
-use crate::core::hierarchy::client::wallet_extension::wallet_utils::*;
+
 use crate::core::hierarchy::client::*;
 use crate::core::storage_node::*;
-use crate::core::tokens::*;
+
 use crate::core::types::*;
 use crate::core::zkps::proof::*;
 use crate::core::zkps::zkp_interface::*;
